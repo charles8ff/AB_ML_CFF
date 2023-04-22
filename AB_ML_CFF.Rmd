@@ -1,0 +1,131 @@
+---
+output: html_document
+---
+## Librerías y semilla
+```{r, echo=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(ggcorrplot)
+library(reshape2)
+library(pscl)
+library(caret)
+
+set.seed(888)
+
+```
+## Carga de datos:
+```{r}
+library(readr)
+df <- read_csv("data/high_diamond_ranked_10min.csv")
+```
+
+
+## Separación en train y test:
+
+
+## Exploración de datos:
+
+La columna gameId no nos aporta información, la quitamos:
+```{r}
+df <- df[,-1]
+```
+
+quitar columnas obviamente correlacionadas por que miden por minuto
+```{r}
+df <- df[,!names(df) %in% c( "blueDeaths", "redDeaths",
+                             "blueEliteMonsters", "redEliteMonsters",
+                             "blueGoldPerMin", "redGoldPerMin",
+                             "blueGoldDiff", "redGoldDiff",
+                             "blueExperienceDiff","redExperienceDiff",
+                             "blueCSPerMin", "redCSPerMin",
+                             "blueGoldPerMin","redGoldPerMin"
+                             )]
+```
+Miramos los vacíos
+```{r}
+colSums(is.na(df))
+```
+
+Buscamos correlaciones: 
+
+```{r}
+corr <- round(cor(df), 1)
+ggcorrplot( corr,
+            hc.order = TRUE,
+            type = "lower",
+            outline.col = "white",
+            tl.cex = 5,
+            )
+
+```
+Podemos observar que blueAVGlevel tiene una correlación muy alta con blueTotalExperience, y sus contrapartidas del equipo rojo redAVGLevel y redTotalExperience, por lo que elegimos una de las 2 para representar este dato.
+```{r}
+df <- df[,!names(df) %in% c( "blueAVGLevel", "redAVGLevel")]
+```
+
+La columna redFirstBlood es la contraparte de blueFirstBlood, quitamos la roja porque así coincide con blueWins (no tenemos redWins, porque precisamente sería la contraparte)
+
+```{r}
+df <- df[,!names(df) %in% c("redFirstBlood")]
+```
+
+Analizamos la distribución, separando entre equipo rojo y equipo azul por claridad
+```{r}
+
+blue_df <- melt(df[1:14])
+red_df <- melt(df[15:26])
+
+ggplot(data=blue_df, aes(x=value))+
+stat_density()+
+facet_wrap(~variable, scales="free")
+
+ggplot(data=red_df, aes(x=value))+
+stat_density()+
+facet_wrap(~variable, scales="free")
+```
+Podemos ver que las variables tienen una distribución normal cuando se trata de variables no dicotómicas, mientras las dicotómicas (blueWins y blueFirstBlood) cumplen con su definición.Vamos a hacer boxplot de los casos anómalos para encontrar outliers y decidir si los debemos quitar.
+
+dragones y heraldos son dicotómicas por las características del dataset, puesto que no suceden más de 1 vez antesde los 10min.
+
+```{r}
+boxplot(df[c("blueWardsPlaced","redWardsPlaced")])
+
+boxplot(df[c("blueWardsDestroyed","redWardsDestroyed")])
+
+boxplot(df[c("blueTowersDestroyed","redTowersDestroyed")])
+```
+Se muestra que son datos plausibles dentro de cómo funciona league of legends, se podría valorar quitarlos si posteriormente perjudiocan al modelo.
+
+## Separación de los datos
+
+```{r}
+mark <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
+train <- df[mark, ]
+test <- df[!mark, ]
+```
+
+## Regresión lineal
+```{r}
+model <- glm( blueWins ~ ., family = "binomial", data = train)
+options (scipen = 999)
+summary(model)
+```
+
+```{r}
+pscl :: pR2(model)["McFadden"]
+```
+```{r}
+
+imp <- as.data.frame(caret::varImp(model))
+imp <- data.frame(overall = imp$Overall,
+           names   = rownames(imp))
+imp[order(imp$overall,decreasing = T),]
+
+```
+
+```{r}
+car :: vif(model)
+```
+Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, volvemos a sacar una tabla de correlación.
+
+## Naive - Bayes 
