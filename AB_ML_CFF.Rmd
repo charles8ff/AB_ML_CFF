@@ -1,8 +1,9 @@
 ---
+title: AB_ML_CFF
 output: html_document
 ---
 ## Librerías y semilla
-```{r, echo=FALSE}
+```{r, echo=FALSE,warning=FALSE}
 library(ggplot2)
 library(tidyverse)
 library(ggcorrplot)
@@ -126,6 +127,6 @@ imp[order(imp$overall,decreasing = T),]
 ```{r}
 car :: vif(model)
 ```
-Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, volvemos a sacar una tabla de correlación.
+Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, deberíamos volver a sacar una tabla de correlación.
 
 ## Naive - Bayes 
