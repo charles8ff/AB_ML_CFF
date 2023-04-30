@@ -195,6 +195,8 @@ summary(df_PCA)
 ```{r}
 fviz_eig(df_PCA, addlabels = TRUE)
 ```
+Con las 2 primeras variables se podría explicar casi todo el dataset
+
 
 ```{r}
 fviz_cos2(df_PCA, choice = "var", axes = 1:2)
