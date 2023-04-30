@@ -1,53 +1,117 @@
 ---
-title: AB_ML_CFF
-output: html_document
+title: "Cómo ganar al League of Legends"
+author:
+- name: Carlos Fisac Ferrández
+  affiliation: MSMK University
+date: "May 17th, 2023"
+output:
+  html_document:
+    df_print: paged
+  html_notebook:
+    number_sections: yes
+    highlight: tango
+  pdf_document: default
+lang: es
 ---
-## Librerías y semilla
-```{r, echo=FALSE,warning=FALSE}
+```{r, include=FALSE}
+# Esto es un bloque mágico que hará algunos outpun más manejables
+options(width = 60)
+local({
+  hook_output <- knitr::knit_hooks$get('output')
+  knitr::knit_hooks$set(output = function(x, options) {
+    if (!is.null(options$max.height)) options$attr.output <- c(
+      options$attr.output,
+      sprintf('style="max-height: %s;"', options$max.height)
+    )
+    hook_output(x, options)
+  })
+})
+```
+# Introducción
+
+El league of legends ha arruinado mi vida y va a arruinar los siguientes 20 minutos que dediques a leerte esto:
+
+# Descripción del problema:
+
+# Análisis en R
+
+## Librerías y semilla:
+
+A continuación descargamos las librerías y establecemos una semilla para garantizar que se puede repetir
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(psych)
+library(psychTools)
 library(ggplot2)
 library(tidyverse)
+library(corrr)
+library(factoextra)
 library(ggcorrplot)
 library(reshape2)
 library(pscl)
 library(caret)
 
+
 set.seed(888)
 
 ```
+
 ## Carga de datos:
+
 ```{r}
 library(readr)
 df <- read_csv("data/high_diamond_ranked_10min.csv")
 ```
 
+# Exploración y limpieza de los datos
 
-## Separación en train y test:
+## Primer contacto
 
+```{r}
+head(df)
 
-## Exploración de datos:
+```
 
-La columna gameId no nos aporta información, la quitamos:
+Miramos los vacíos
+
+```{r, max.height='200px'}
+colSums(is.na(df))
+```
+```{r}
+str(data)
+```
+Miramos propiedades generales de las variables con *describe()* del paquete [psych](https://www.rdocumentation.org/packages/psych/versions/2.3.3/topics/describe).
+```{r}
+describe(df)
+```
+
+## Filas lógicamente correlacionadas en abse a conocimientos del juego
+
+La columna *gameId* no nos aporta información puesto que no guarda informaciíon mas allá que para cuantificar las partidas en sus servidores, la podemos quitar:
 ```{r}
 df <- df[,-1]
 ```
 
-quitar columnas obviamente correlacionadas por que miden por minuto
+Por cómo funciona el juego, en este dataset hay muchas columnas con información redundante, puesto que si un equipo se hace una baja (*blueKill*), se corresponde con que el equipo rojo obtiene una muerte (*redDeaths*), por lo que esas columnas siempre van a contener información complementaria. 
 ```{r}
-df <- df[,!names(df) %in% c( "blueDeaths", "redDeaths",
-                             "blueEliteMonsters", "redEliteMonsters",
-                             "blueGoldPerMin", "redGoldPerMin",
-                             "blueGoldDiff", "redGoldDiff",
-                             "blueExperienceDiff","redExperienceDiff",
-                             "blueCSPerMin", "redCSPerMin",
-                             "blueGoldPerMin","redGoldPerMin"
-                             )]
-```
-Miramos los vacíos
-```{r}
-colSums(is.na(df))
+df <- df[,!names(df) %in% c("blueDeaths", "redDeaths")]
 ```
 
-Buscamos correlaciones: 
+De forma análoga, como sabemos que el dataset está capado en los primeros 10 minutos de la partida, también podemos limpiar columnas *PerMin* puesto que van a estar directamente correladas con columnas de su misma métrica. También las columnas que muestran un diferencial de oro o experiencia se pueden suprimir en valor de los valores totales (*blueTotalGold*, y *redTotalGold*).
+```{r}
+df <- df[,!names(df) %in% c("blueCSPerMin", "redCSPerMin",
+                            "blueGoldPerMin", "redGoldPerMin",
+                            "blueGoldDiff", "redGoldDiff",
+                            "blueExperienceDiff","redExperienceDiff"
+                            )]
+```
+
+Por último, este dataset agrupaba los [Monstruos Épicos](https://leagueoflegends.fandom.com/wiki/Category:Epic_monsters) en una misma columna, he decidido quedarme con los datos por separado (*blueDragons, blueHeralds, redDragons, redHeralds*) para estudiar si preocuparse más de un objetivo u otro es determinanteb a la hora de ganar o perder.
+```{r}
+df <- df[,!names(df) %in% c( "blueEliteMonsters", "redEliteMonsters")]
+```
+
+Buscamos correlaciones entre las variables que nos quedan:
 
 ```{r}
 corr <- round(cor(df), 1)
@@ -59,20 +123,22 @@ ggcorrplot( corr,
             )
 
 ```
-Podemos observar que blueAVGlevel tiene una correlación muy alta con blueTotalExperience, y sus contrapartidas del equipo rojo redAVGLevel y redTotalExperience, por lo que elegimos una de las 2 para representar este dato.
+
+Podemos observar que *blueAVGlevel* tiene una correlación muy alta con *blueTotalExperience*, y sus contrapartidas del equipo rojo *redAVGLevel* y *redTotalExperience*, por lo que elegimos una de las 2 para representar este dato, en esta caso vamos a elegir los totales.
+
 ```{r}
 df <- df[,!names(df) %in% c( "blueAVGLevel", "redAVGLevel")]
 ```
 
-La columna redFirstBlood es la contraparte de blueFirstBlood, quitamos la roja porque así coincide con blueWins (no tenemos redWins, porque precisamente sería la contraparte)
+La columna *redFirstBlood* es la contraparte de *blueFirstBlood*, quitamos la variable del equipo rojo porque así coincide con *blueWins*, que es nuestra variable a predecir (no tenemos *redWins*, porque precisamente sería la contraparte).
 
 ```{r}
 df <- df[,!names(df) %in% c("redFirstBlood")]
 ```
 
-Analizamos la distribución, separando entre equipo rojo y equipo azul por claridad
-```{r}
+Analizamos la distribución, separando entre equipo rojo y equipo azul por claridad a la hora de mostrar los gráficos
 
+```{r}
 blue_df <- melt(df[1:14])
 red_df <- melt(df[15:26])
 
@@ -84,9 +150,12 @@ ggplot(data=red_df, aes(x=value))+
 stat_density()+
 facet_wrap(~variable, scales="free")
 ```
-Podemos ver que las variables tienen una distribución normal cuando se trata de variables no dicotómicas, mientras las dicotómicas (blueWins y blueFirstBlood) cumplen con su definición.Vamos a hacer boxplot de los casos anómalos para encontrar outliers y decidir si los debemos quitar.
 
-dragones y heraldos son dicotómicas por las características del dataset, puesto que no suceden más de 1 vez antesde los 10min.
+Podemos ver que las variables tienen una distribución normal cuando se trata de variables no dicotómicas, mientras las dicotómicas (*blueWins*, *blueFirstBlood*, *blueHerlads*, *blueDragons*) cumplen con su definición. 
+
+Los Dragones y Heraldos son dicotómicas por las características del *dataset*, puesto que no pueden más de 1 vez antes de la marca temporal de los 10min.
+
+Vamos a hacer boxplot de los casos anómalos para encontrar *outliers* y decidir si los debemos quitar.
 
 ```{r}
 boxplot(df[c("blueWardsPlaced","redWardsPlaced")])
@@ -95,9 +164,44 @@ boxplot(df[c("blueWardsDestroyed","redWardsDestroyed")])
 
 boxplot(df[c("blueTowersDestroyed","redTowersDestroyed")])
 ```
-Se muestra que son datos plausibles dentro de cómo funciona league of legends, se podría valorar quitarlos si posteriormente perjudiocan al modelo.
 
-## Separación de los datos
+Se comprueba que son datos plausibles dentro de cómo funciona *League of Legends*, se podría valorar quitarlos si posteriormente perjudicasen al modelo. El caso más preocupante serían las partidas donde se tiran más de 2 torres al minuto 10 pero de momento no se van a asacar del modelo puesto que no hay demasiadas ocurrencias.
+
+## Análisis de componentes principales PCA 
+
+Quitamos la variable a predecir (*blueWins*)
+
+```{r}
+df_nowins <- df[,-1]
+```
+
+```{r}
+df_normalized <- scale(df_nowins)
+head(df_normalized)
+corr_norm <- cor(df_normalized)
+ggcorrplot( corr_norm,
+            hc.order = TRUE,
+            type = "lower",
+            outline.col = "white",
+            tl.cex = 5,
+          )
+```
+
+```{r}
+df_PCA <- prcomp(corr_norm)
+summary(df_PCA)
+```
+
+```{r}
+fviz_eig(df_PCA, addlabels = TRUE)
+```
+
+```{r}
+fviz_cos2(df_PCA, choice = "var", axes = 1:2)
+```
+
+## Separación de los datos:
+Se escoge repartir los datos de forma aleatoria en 2 subsets, uno de entrenamiento y otro para comprobar posteriormente.
 
 ```{r}
 mark <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
@@ -105,16 +209,22 @@ train <- df[mark, ]
 test <- df[!mark, ]
 ```
 
-## Regresión lineal
+## Regresión lineal múltiple con el dataframe original
+
 ```{r}
-model <- glm( blueWins ~ ., family = "binomial", data = train)
-options (scipen = 999)
+model <- lm( blueWins ~ ., data = train)
+
 summary(model)
 ```
+
+Cosas importantes:
+
+El p-valor es estádisticamente significativo
 
 ```{r}
 pscl :: pR2(model)["McFadden"]
 ```
+
 ```{r}
 
 imp <- as.data.frame(caret::varImp(model))
@@ -127,6 +237,7 @@ imp[order(imp$overall,decreasing = T),]
 ```{r}
 car :: vif(model)
 ```
+
 Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, deberíamos volver a sacar una tabla de correlación.
 
-## Naive - Bayes 
+## Naive - Bayes
