@@ -50,7 +50,12 @@ library(ggcorrplot)
 library(reshape2)
 library(pscl)
 library(caret)
+library(caretEnsemble)
+library(dplyr)
+library(ggplot2)
 
+
+library(e1071)
 
 set.seed(888)
 
@@ -118,8 +123,9 @@ corr <- round(cor(df), 1)
 ggcorrplot( corr,
             hc.order = TRUE,
             type = "lower",
-            outline.col = "white",
+            outline.col = "gray",
             tl.cex = 5,
+            colors = c("#6D9EC1", "white", "#E46726")
             )
 
 ```
@@ -165,7 +171,7 @@ boxplot(df[c("blueWardsDestroyed","redWardsDestroyed")])
 boxplot(df[c("blueTowersDestroyed","redTowersDestroyed")])
 ```
 
-Se comprueba que son datos plausibles dentro de cómo funciona *League of Legends*, se podría valorar quitarlos si posteriormente perjudicasen al modelo. El caso más preocupante serían las partidas donde se tiran más de 2 torres al minuto 10 pero de momento no se van a asacar del modelo puesto que no hay demasiadas ocurrencias.
+Se comprueba que son datos plausibles dentro de cómo funciona *League of Legends*, se podría valorar quitarlos si posteriormente perjudicasen al modelo. El caso más preocupante serían las partidas donde se tiran más de 2 torres al minuto 10 pero de momento no se van a sacar del modelo.
 
 ## Análisis de componentes principales PCA 
 
@@ -173,6 +179,7 @@ Quitamos la variable a predecir (*blueWins*)
 
 ```{r}
 df_nowins <- df[,-1]
+df_wins <-df$blueWins
 ```
 
 ```{r}
@@ -184,6 +191,7 @@ ggcorrplot( corr_norm,
             type = "lower",
             outline.col = "white",
             tl.cex = 5,
+            colors = c("#dd1c77", "white", "#2c7fb8")
           )
 ```
 
@@ -195,51 +203,121 @@ summary(df_PCA)
 ```{r}
 fviz_eig(df_PCA, addlabels = TRUE)
 ```
-Con las 2 primeras variables se podría explicar casi todo el dataset
+Con las 2 primeras variables se podría explicar casi todo el dataset, pero que elegimos las primeras 5 para tener un alto porcentaje de explicación de la variabilidad.
+
+Con el gráfico a continuación mostramos lo que aportan cada variable a las 5 dimensiones que hemos elegido
 
 
 ```{r}
-fviz_cos2(df_PCA, choice = "var", axes = 1:2)
+fviz_cos2(df_PCA, choice = "var", axes = 1:5)
 ```
 
 ## Separación de los datos:
 Se escoge repartir los datos de forma aleatoria en 2 subsets, uno de entrenamiento y otro para comprobar posteriormente.
 
 ```{r}
-mark <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
-train <- df[mark, ]
-test <- df[!mark, ]
+mark1 <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
+train <- df[mark1, ]
+test <- df[!mark1, ]
+
+mark2 <- sample(c ( TRUE , FALSE ), nrow (df_nowins), replace = TRUE , prob = c (0.8, 0.2))
+train_nowins <- df_nowins[mark2, ]
+test_nowins <- df_nowins[!mark2, ]
+
+
 ```
 
-## Regresión lineal múltiple con el dataframe original
+# Regresión lineal múltiple (con el dataframe original)
 
 ```{r}
-model <- lm( blueWins ~ ., data = train)
+model_glm <- glm( blueWins ~ ., data = train)
 
-summary(model)
+summary(model_glm)
 ```
 
 Cosas importantes:
 
 El p-valor es estádisticamente significativo
+Se ven las variables que son significativa (las que tienen asteriscos)
+
+Pseudo R cuadrado 
 
 ```{r}
-pscl :: pR2(model)["McFadden"]
+pscl :: pR2(model_glm)["McFadden"]
+```
+Como esté entre 2.0 y 0.4 esta ok
+
+
+```{r}
+caret::varImp(model_glm)
 ```
 
+
 ```{r}
 
-imp <- as.data.frame(caret::varImp(model))
-imp <- data.frame(overall = imp$Overall,
+imp <- as.data.frame(caret::varImp(model_glm))
+imp <- data.frame(VarImp = imp$Overall,
            names   = rownames(imp))
-imp[order(imp$overall,decreasing = T),]
+imp[order(imp$VarImp,decreasing = T),]
 
 ```
 
 ```{r}
-car :: vif(model)
+car :: vif(model_glm)
 ```
 
-Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, deberíamos volver a sacar una tabla de correlación.
+Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, vamos a hacer más trabajo sobre los datos.
 
-## Naive - Bayes
+
+
+
+# Naive - Bayes   
+
+
+
+```{r}
+train_NB <- train
+train_NB$blueWins <- as.factor(train_NB$blueWins)
+
+
+test_NB <- test
+#test_NB$blueWins <- as.factor(test_NB$blueWins)
+
+x_train_NB <- train_NB[,-1]
+y_train_NB <- train_NB$blueWins
+
+```
+
+
+
+```{r, warning=FALSE}
+
+model_NB = caret::train(x_train_NB,y_train_NB,'naive_bayes',trControl=trainControl(method='cv',number=10))
+# cv es cross validation
+                        
+model_NB
+```
+```{r, warning=FALSE}
+predictions_NB <- predict(model_NB, newdata = test_NB )
+real_NB <- as.factor(test_NB$blueWins)
+caret::confusionMatrix(predictions_NB, real_NB)
+```
+
+Esto dice que un 73 casi de aciertos así que pinta bien, 
+
+
+```{r}
+caret::filterVarImp(model_NB$trainingData,y_train_NB,nonpara = TRUE)
+```
+
+```{r}
+
+imp_1 <- as.data.frame(caret::filterVarImp(model_NB$trainingData,y_train_NB,nonpara = TRUE))
+imp_1 <- data.frame(VarImp = imp_1$X0,
+                    names = rownames(imp_1))
+imp_1<-head(imp_1, -1)
+imp_1[order(imp_1$VarImp, decreasing = T),]
+
+
+```
+
