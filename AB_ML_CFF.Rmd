@@ -1,61 +1,95 @@
 ---
 title: "Cómo ganar al League of Legends"
+subtitle: "Assingment Brief de la asignatura Machine Learning"
 author:
 - name: Carlos Fisac Ferrández
   affiliation: MSMK University
 date: "May 17th, 2023"
+abstract: |
+  Análisis en R de qué variables son más importantes a la hora de ganar una partida del aclamado título de *Riot Games*.
 output:
   html_document:
-    df_print: paged
-  html_notebook:
-    number_sections: yes
+    number_sections: true
+    theme: simplex
     highlight: tango
-  pdf_document: default
-lang: es
+    lang: es
+    toc: true
+  word_document: default
 ---
-```{r, include=FALSE}
-# Esto es un bloque mágico que hará algunos outpun más manejables
+
+```{r,echo = FALSE, include = FALSE}
+# Esto es un bloque mágico que hará algunos output (en html) más manejables.
 options(width = 60)
 local({
   hook_output <- knitr::knit_hooks$get('output')
   knitr::knit_hooks$set(output = function(x, options) {
-    if (!is.null(options$max.height)) options$attr.output <- c(
-      options$attr.output,
-      sprintf('style="max-height: %s;"', options$max.height)
-    )
+    if (!is.null(options$max.height)) options$attr.output <- c(options$attr.output,
+                                                               sprintf('style="max-height: %s;"',
+                                                               options$max.height))
     hook_output(x, options)
   })
 })
 ```
+
 # Introducción
 
-El league of legends ha arruinado mi vida y va a arruinar los siguientes 20 minutos que dediques a leerte esto:
+El League of Legends ha arruinado mi vida y va a arruinar los siguientes 20 minutos que dediques a leerte esto.
 
-# Descripción del problema:
+*League of Legends* es un juego multijugador de arena de batalla en línea (*MOBA*), desarrollado y publicado por *Riot Games* en 2009. En cada partida, dos equipos de cinco integrantes cada uno, lucharán por derribar el "Nexo" enemigo, el cual es una estructura colocada en el lado opuesto de donde comienza cada equipo. En el modo clásico, cada uno de los integrantes controlará un personaje distinto denominado "campeón", con un set de habilidades único y diferentes estilos de juego.
+
+El anterior mencionado "Nexo" está protegido por distintas estructuras y "súbditos", unos enemigos que aparecen periódicamente desde cada lado del mapa para ayudar a los "campeones" en su propósito de abrirse paso hacia la base enemiga. Esos súbditos dan "oro" y "experiencia", lo cual es necesario para mejorar a tu "campeón" a base de items (que se compran con "oro") y "niveles" (los cuales mejoran tus "habilidades").
+
+La arena se conoce como "La Grieta del Invocador" y toma esta estructura (simplificada):
+
+-   Hay 3 "líneas" o calles: por ellas caminarán los "súbditos" y están protegidas por 3 torres en cada calle antes de llegar a la base. Las "líneas" son *Top, Mid* y *Bot.*
+
+-   El resto del mapa que no es ni una "base" ni una "calle" (en verde oscuro en la imagen) se conoce como "jungla", en la cual hay monstruos neutrales (los cuales se comportan como los "súbditos" mencionados anteriormente) y objetivos importantes para acabar la partida como los "Dragones", "Heraldos" y "Barón Nashor". Estos objetivos proporcionan mejoras al equipo que los reclame.
+
+![Grieta del Invocador (simplificada)](https://upload.wikimedia.org/wikipedia/commons/d/dc/Map_of_MOBA.svg)
+
+[Original PNG version by Raizin, SVG rework by Sameboat](https://commons.wikimedia.org/w/index.php?curid=29443207)
+
+Los "campeones" por defecto no pueden ver todas las zonas del mapa (y algunos "campeones" basan su identidad en no ser vistos, p. ej. *Evelynn*), por lo que es necesario comprar "tótems de visión" para colocar en las zonas de jungla y posteriormente en las zonas derribadas por el equipo contrario.
+
+# Descripción del problema
+
+Con esta introducción simplificada, podemos ver que hay muchas variables que pueden dar ventaja a un equipo o a otro, y aunque el objetivo final sea inequívoco para ganar (derribar el nexo enemigo), hay muchas variables que permiten declarar qué equipo va por delante o qué equipo gana en función de muchas otras variables que no sean autoexplicativas como "Nexo destruido: Sí o No".
+
+El objetivo en este trabajo es crear un modelo que prediga qué equipo va a ganar una partida en función de qué haya sucedido en la misma.
 
 # Análisis en R
 
-## Librerías y semilla:
+## Datos de origen
 
-A continuación descargamos las librerías y establecemos una semilla para garantizar que se puede repetir
+En principio la idea era acceder a la [API Oficial](https://developer.riotgames.com/) de Riot Games, pero se demoran entre 2 y 4 semanas de espera y tienes acceso limitado por consulta, por lo que se acabó descartando por falta de tiempo. Es planteable en un futuro reescribir este trabajo con datos de mi propia cosecha.
+
+El *dataset* ha sido obtenido de forma pública y se puede consultar en [Kaggle](https://www.kaggle.com/datasets/bobbyscience/league-of-legends-diamond-ranked-games-10-min). El *dataset* contiene datos sobre partidas de [*elo*](https://en.wikipedia.org/wiki/Elo_rating_system) alto, en sus primeros 10 min de duración de duración. 
+
+## Librerías y semilla
+
+A continuación descargamos las librerías de R y establecemos una semilla para garantizar que se puede repetir el ejercicio.
 
 ```{r, echo = FALSE, warning = FALSE, message = FALSE}
-library(psych)
-library(psychTools)
-library(ggplot2)
-library(tidyverse)
-library(corrr)
-library(factoextra)
-library(ggcorrplot)
-library(reshape2)
-library(pscl)
 library(caret)
 library(caretEnsemble)
+library(corrr)
 library(dplyr)
-library(ggplot2)
-
-
 library(e1071)
+library(factoextra)
+library(ggcorrplot)
+library(ggplot2)
+library(Metrics)
+library(pscl)
+library(psych)
+library(psychTools)
+library(rattle)
+library(readr)
+library(reshape2)
+library(rpart)
+library(rpart.plot)
+library(tidyverse)
+
+library(GGally)
 
 set.seed(888)
 
@@ -64,7 +98,6 @@ set.seed(888)
 ## Carga de datos:
 
 ```{r}
-library(readr)
 df <- read_csv("data/high_diamond_ranked_10min.csv")
 ```
 
@@ -74,35 +107,36 @@ df <- read_csv("data/high_diamond_ranked_10min.csv")
 
 ```{r}
 head(df)
-
 ```
 
-Miramos los vacíos
+Miramos si hay vacíos.
 
 ```{r, max.height='200px'}
 colSums(is.na(df))
 ```
-```{r}
-str(data)
-```
+
+No hay datos faltantes, por lo que el dataset es íntegro para seguir trabajando y no es necesario hacer tratamiento de faltantes.
+
 Miramos propiedades generales de las variables con *describe()* del paquete [psych](https://www.rdocumentation.org/packages/psych/versions/2.3.3/topics/describe).
-```{r}
+```{r, max.height='200px'}
 describe(df)
 ```
 
-## Filas lógicamente correlacionadas en abse a conocimientos del juego
+## Variables correlacionadas por la naturaleza del dataset
 
-La columna *gameId* no nos aporta información puesto que no guarda informaciíon mas allá que para cuantificar las partidas en sus servidores, la podemos quitar:
+En base a mi conocimiento del juego, hay variables que a simple vistazo van a tener gran correlación por cómo se estructura el *dataset*.
+
+La columna *gameId* no nos aporta información puesto que no guarda nada mas allá que para cuantificar las partidas en los servidores de *Riot Games*, se puede quitar.
 ```{r}
 df <- df[,-1]
 ```
 
-Por cómo funciona el juego, en este dataset hay muchas columnas con información redundante, puesto que si un equipo se hace una baja (*blueKill*), se corresponde con que el equipo rojo obtiene una muerte (*redDeaths*), por lo que esas columnas siempre van a contener información complementaria. 
+Por cómo funciona el juego, en este dataset hay muchas columnas con información redundante, puesto que si un equipo se hace una baja (*blueKill*), se corresponde con que el equipo rojo obtiene una muerte (*redDeaths*), por lo que esas columnas siempre van a contener información complementaria.
 ```{r}
 df <- df[,!names(df) %in% c("blueDeaths", "redDeaths")]
 ```
 
-De forma análoga, como sabemos que el dataset está capado en los primeros 10 minutos de la partida, también podemos limpiar columnas *PerMin* puesto que van a estar directamente correladas con columnas de su misma métrica. También las columnas que muestran un diferencial de oro o experiencia se pueden suprimir en valor de los valores totales (*blueTotalGold*, y *redTotalGold*).
+De forma análoga, como sabemos que el dataset está capado en los primeros 10 minutos de la partida, también se pueden eliminar las columnas *PerMin* puesto que van a estar directamente correladas con columnas de su misma métrica. Las columnas que muestran un diferencial de oro o experiencia también se pueden suprimir en valor de los valores totales (*blueTotalGold*, y *redTotalGold*).
 ```{r}
 df <- df[,!names(df) %in% c("blueCSPerMin", "redCSPerMin",
                             "blueGoldPerMin", "redGoldPerMin",
@@ -111,13 +145,12 @@ df <- df[,!names(df) %in% c("blueCSPerMin", "redCSPerMin",
                             )]
 ```
 
-Por último, este dataset agrupaba los [Monstruos Épicos](https://leagueoflegends.fandom.com/wiki/Category:Epic_monsters) en una misma columna, he decidido quedarme con los datos por separado (*blueDragons, blueHeralds, redDragons, redHeralds*) para estudiar si preocuparse más de un objetivo u otro es determinanteb a la hora de ganar o perder.
+Por último, este dataset agrupaba los [Monstruos Épicos](https://leagueoflegends.fandom.com/wiki/Category:Epic_monsters) en una misma columna, se ha decidido conservar con los datos por separado (*blueDragons, blueHeralds, redDragons, redHeralds*) para estudiar si preocuparse más de un objetivo u otro es determinante a la hora de ganar o perder.
 ```{r}
 df <- df[,!names(df) %in% c( "blueEliteMonsters", "redEliteMonsters")]
 ```
 
-Buscamos correlaciones entre las variables que nos quedan:
-
+Se buscan correlaciones entre las variables que quedan:
 ```{r}
 corr <- round(cor(df), 1)
 ggcorrplot( corr,
@@ -126,43 +159,43 @@ ggcorrplot( corr,
             outline.col = "gray",
             tl.cex = 5,
             colors = c("#6D9EC1", "white", "#E46726")
-            )
-
+          )
 ```
 
-Podemos observar que *blueAVGlevel* tiene una correlación muy alta con *blueTotalExperience*, y sus contrapartidas del equipo rojo *redAVGLevel* y *redTotalExperience*, por lo que elegimos una de las 2 para representar este dato, en esta caso vamos a elegir los totales.
-
+Se puede observar que *blueAVGlevel* tiene una correlación muy alta con *blueTotalExperience*, y sus contrapartidas del equipo rojo *redAVGLevel* y *redTotalExperience*, una vez más una está en función de la otra (*TotalExperience* = 5 * *AVGLevel* * experiencia necesaria para subir de nivel). Entonces, se elige una de las 2 para representar este dato, en esta caso los totales.
 ```{r}
 df <- df[,!names(df) %in% c( "blueAVGLevel", "redAVGLevel")]
 ```
 
-La columna *redFirstBlood* es la contraparte de *blueFirstBlood*, quitamos la variable del equipo rojo porque así coincide con *blueWins*, que es nuestra variable a predecir (no tenemos *redWins*, porque precisamente sería la contraparte).
-
+La columna *redFirstBlood* es la contraparte de *blueFirstBlood* (puesto que si no la consigue un equipo la consigue el otro), quitamos la variable del equipo rojo porque así coincide con *blueWins*, que es la variable a predecir (no existe *redWins*, porque precisamente sería la contraparte).
 ```{r}
 df <- df[,!names(df) %in% c("redFirstBlood")]
 ```
 
-Analizamos la distribución, separando entre equipo rojo y equipo azul por claridad a la hora de mostrar los gráficos
+## Variables correlacionadas restantes
 
+Queda destacar una correlación natural entre *blueKills* y *blueTotalGold* (y sus contrapartidas *redKills* y *redTotalGold*), puesto que cada kill da 300 de oro, pero al haber más formas de conseguir oro en el juego, no es pertinente eliminar ninguna de las dos.
+
+Se analiza la distribución, separando entre equipo rojo y equipo azul por claridad a la hora de mostrar los gráficos
 ```{r}
 blue_df <- melt(df[1:14])
 red_df <- melt(df[15:26])
 
-ggplot(data=blue_df, aes(x=value))+
+ggplot(data = blue_df, aes(x = value))+
 stat_density()+
 facet_wrap(~variable, scales="free")
 
-ggplot(data=red_df, aes(x=value))+
+ggplot(data=red_df, aes(x = value))+
 stat_density()+
 facet_wrap(~variable, scales="free")
 ```
 
-Podemos ver que las variables tienen una distribución normal cuando se trata de variables no dicotómicas, mientras las dicotómicas (*blueWins*, *blueFirstBlood*, *blueHerlads*, *blueDragons*) cumplen con su definición. 
 
-Los Dragones y Heraldos son dicotómicas por las características del *dataset*, puesto que no pueden más de 1 vez antes de la marca temporal de los 10min.
+Se puede ver que las variables tienen una distribución normal cuando se trata de variables no dicotómicas, mientras las dicotómicas (*blueWins*, *blueFirstBlood*, *blueHerlads*, *blueDragons* y sus contrapartes en *red*) cumplen con su definición. Las variables *blueTowersDestroyed*, *blueWardsPlaced* y *blueWardsDestroyed* siguen una distribución logarítmica normal, puesto que los sucesos alejados del eje son muy improbables.
 
-Vamos a hacer boxplot de los casos anómalos para encontrar *outliers* y decidir si los debemos quitar.
+Los "Dragones" y "Heraldos" son dicotómicas por las características del *dataset*, puesto que no pueden suceder más de 1 vez antes de la marca temporal de los 10min.
 
+Se hacen *boxplots* de los casos anómalos para encontrar *outliers* y decidir si se deben quitar.
 ```{r}
 boxplot(df[c("blueWardsPlaced","redWardsPlaced")])
 
@@ -173,18 +206,23 @@ boxplot(df[c("blueTowersDestroyed","redTowersDestroyed")])
 
 Se comprueba que son datos plausibles dentro de cómo funciona *League of Legends*, se podría valorar quitarlos si posteriormente perjudicasen al modelo. El caso más preocupante serían las partidas donde se tiran más de 2 torres al minuto 10 pero de momento no se van a sacar del modelo.
 
-## Análisis de componentes principales PCA 
+## Análisis de componentes principales (PCA)
 
-Quitamos la variable a predecir (*blueWins*)
+Quitamos la variable a predecir (*blueWins*).
 
 ```{r}
 df_nowins <- df[,-1]
 df_wins <-df$blueWins
 ```
 
-```{r}
+
+```{r, max.height='200px'}
 df_normalized <- scale(df_nowins)
 head(df_normalized)
+```
+
+
+```{r,}
 corr_norm <- cor(df_normalized)
 ggcorrplot( corr_norm,
             hc.order = TRUE,
@@ -195,25 +233,29 @@ ggcorrplot( corr_norm,
           )
 ```
 
+
+Se observa una tabla similar a la anterior, lo cual es lógico. A continuación se hace un análisis de componentes principales del *dataset* normalizado.
 ```{r}
 df_PCA <- prcomp(corr_norm)
 summary(df_PCA)
 ```
 
+Con la gráfica a continuación se demuestra que 2 dimensiones ya explican un alto porcentaje de los datos.
 ```{r}
 fviz_eig(df_PCA, addlabels = TRUE)
 ```
-Con las 2 primeras variables se podría explicar casi todo el dataset, pero que elegimos las primeras 5 para tener un alto porcentaje de explicación de la variabilidad.
 
-Con el gráfico a continuación mostramos lo que aportan cada variable a las 5 dimensiones que hemos elegido
+Con las 2 primeras variables se podría explicar casi todo el dataset, pero se eligen las primeras 5 para tener un alto porcentaje de explicación de la variabilidad.
 
+Con el gráfico a continuación mostramos lo que aportan cada variable a las 5 dimensiones que hemos elegido.
 
 ```{r}
 fviz_cos2(df_PCA, choice = "var", axes = 1:5)
 ```
 
-## Separación de los datos:
-Se escoge repartir los datos de forma aleatoria en 2 subsets, uno de entrenamiento y otro para comprobar posteriormente.
+## Separación de los datos
+
+Se escoge repartir los datos de forma aleatoria en 2 subsets, uno de entrenamiento y otro para comprobar posteriormente los modelos frente a los datos originales. Dividimos también el *dataset* sin victorias. El *split* se hace un 80-20 para cada uno de los *datasets*.
 
 ```{r}
 mark1 <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
@@ -223,62 +265,57 @@ test <- df[!mark1, ]
 mark2 <- sample(c ( TRUE , FALSE ), nrow (df_nowins), replace = TRUE , prob = c (0.8, 0.2))
 train_nowins <- df_nowins[mark2, ]
 test_nowins <- df_nowins[!mark2, ]
-
-
 ```
 
-# Regresión lineal múltiple (con el dataframe original)
+# Modelos escogidos
+
+En este trabajo se tratan 3 modelos distintos de *Machine Learning*, posteriormente en el apartado de métricas se decidirá cuál es el más apto para la resolución del problema.
+
+## Regresión Logística
+
+Se usa la función *glm()* (modelo lineal general) y especificamos *family = “binomial”* para usar un modelo de regresión logística al *dataset*. La variable a predecir es *blueWins*
+
 
 ```{r}
-model_glm <- glm( blueWins ~ ., data = train)
-
+model_glm <- glm( blueWins ~ .,family = "binomial", data = train)
 summary(model_glm)
 ```
 
-Cosas importantes:
 
-El p-valor es estádisticamente significativo
-Se ven las variables que son significativa (las que tienen asteriscos)
+Se puede observar que las variables con mayores p-valor son aquellas que son más importantes a la hora de ganar una partida, representadas con asteriscos en el resumen del modelo.
 
-Pseudo R cuadrado 
-
+Para comprobar cúanto se ajusta el modelo a los datos, se usa R^2^ de McFadden:
 ```{r}
-pscl :: pR2(model_glm)["McFadden"]
-```
-Como esté entre 2.0 y 0.4 esta ok
-
-
-```{r}
-caret::varImp(model_glm)
+pscl::pR2(model_glm)["McFadden"]
 ```
 
+El R^2^ de McFadden de valores entre 0.2 y 0.4 indican que el modelo se ajusta [muy bien a los datos ](https://eml.berkeley.edu/~mcfadden/travel.html), puesto que inferior a 0.2 es que el modelo está muy alejado, y más de 0.4 es que el modelo se ajusta de más, dando lugar a *overfitting*.
+
+A continuación, sacamos una tabla con la importancia de las variables:
 
 ```{r}
-
 imp <- as.data.frame(caret::varImp(model_glm))
 imp <- data.frame(VarImp = imp$Overall,
            names   = rownames(imp))
-imp[order(imp$VarImp,decreasing = T),]
+imp <- imp[order(imp$VarImp,decreasing = T),]
+rownames(imp) <- NULL
+imp
 
 ```
 
+
+Para comprobar si existen problemas de multicolinealidad, se usan los Factores de Inflación de Varianza (VIF).
 ```{r}
-car :: vif(model_glm)
+car::vif(model_glm)
 ```
 
-Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, vamos a hacer más trabajo sobre los datos.
+Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, es posible que se deba rehacer este modelo haciendo un tratamiento distinto, pero en principio la cadena lógica que nos lleva a elegir esta variables se mantiene, puesto que las que más problemas de colinealidad presentan son las que se han previsto en la [Exploración de Datos](#variables-correlacionadas-restantes).
 
-
-
-
-# Naive - Bayes   
-
-
+## Naive - Bayes
 
 ```{r}
 train_NB <- train
 train_NB$blueWins <- as.factor(train_NB$blueWins)
-
 
 test_NB <- test
 #test_NB$blueWins <- as.factor(test_NB$blueWins)
@@ -288,8 +325,6 @@ y_train_NB <- train_NB$blueWins
 
 ```
 
-
-
 ```{r, warning=FALSE}
 
 model_NB = caret::train(x_train_NB,y_train_NB,'naive_bayes',trControl=trainControl(method='cv',number=10))
@@ -297,27 +332,52 @@ model_NB = caret::train(x_train_NB,y_train_NB,'naive_bayes',trControl=trainContr
                         
 model_NB
 ```
+
 ```{r, warning=FALSE}
 predictions_NB <- predict(model_NB, newdata = test_NB )
 real_NB <- as.factor(test_NB$blueWins)
 caret::confusionMatrix(predictions_NB, real_NB)
 ```
 
-Esto dice que un 73 casi de aciertos así que pinta bien, 
+Este modelo obtiene casi un 73% de aciertos, en el apartado métricas lo compararemos con otros modelos.
 
-
-```{r}
-caret::filterVarImp(model_NB$trainingData,y_train_NB,nonpara = TRUE)
-```
+Importancia de las variables:
 
 ```{r}
-
-imp_1 <- as.data.frame(caret::filterVarImp(model_NB$trainingData,y_train_NB,nonpara = TRUE))
-imp_1 <- data.frame(VarImp = imp_1$X0,
-                    names = rownames(imp_1))
-imp_1<-head(imp_1, -1)
-imp_1[order(imp_1$VarImp, decreasing = T),]
-
-
+imp_1 <- as.data.frame(caret::filterVarImp(model_NB$trainingData, y_train_NB,nonpara = TRUE))
+imp_1 <- data.frame(VarImp = imp_1$X0, names = rownames(imp_1))
+imp_1 <- head(imp_1, -1)
+imp_1 <- imp_1[order(imp_1$VarImp, decreasing = T),]
+rownames(imp_1) <- NULL
+imp_1
 ```
+
+## Árbol de decisión
+
+Se usa la librería *rpart()* para hacer un modelo de árbol de decisión.
+```{r}
+model_tree <- rpart(blueWins~.,
+              data = train,
+              method = "class")
+rpart.plot(model_tree, nn=TRUE)
+```
+
+En la tabla a continuación se muestran las reglas que sigue el árbol a la hora de decidir.
+```{r}
+rules <- rpart.rules(model_tree)
+row.names(rules) <- NULL
+rules
+```
+
+Hacemos la matriz de confusión de el modelo de árbol.
+```{r}
+pred <- predict(object = model_tree, test[-1],type = "class")
+confusionMatrix(table(test$blueWins, pred))
+```
+
+Se muestra una tasa de acierto del 72%. 
+
+# Métricas
+
+
 
