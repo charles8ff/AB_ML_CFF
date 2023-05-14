@@ -204,7 +204,7 @@ boxplot(df[c("blueWardsDestroyed","redWardsDestroyed")])
 boxplot(df[c("blueTowersDestroyed","redTowersDestroyed")])
 ```
 
-Se comprueba que son datos plausibles dentro de cómo funciona *League of Legends*, se podría valorar quitarlos si posteriormente perjudicasen al modelo. El caso más preocupante serían las partidas donde se tiran más de 2 torres al minuto 10 pero de momento no se van a sacar del modelo.
+Se comprueba que son datos plausibles dentro de cómo funciona *League of Legends*, se podría valorar quitarlos si posteriormente perjudicasen al modelo. El caso más preocupante serían las partidas donde se tiran más de 2 torres al minuto 10, pero de momento no se van a sacar del modelo.
 
 ## Análisis de componentes principales (PCA)
 
@@ -245,12 +245,12 @@ Con la gráfica a continuación se demuestra que 2 dimensiones ya explican un al
 fviz_eig(df_PCA, addlabels = TRUE)
 ```
 
-Con las 2 primeras variables se podría explicar casi todo el dataset, pero se eligen las primeras 5 para tener un alto porcentaje de explicación de la variabilidad.
+Con las 2 primeras variables se podría explicar casi todo el dataset, pero se eligen las primeras 6 para tener un alto porcentaje de explicación de la variabilidad.
 
-Con el gráfico a continuación mostramos lo que aportan cada variable a las 5 dimensiones que hemos elegido.
+Con el gráfico a continuación mostramos lo que aportan cada variable a las 6 dimensiones que hemos elegido.
 
 ```{r}
-fviz_cos2(df_PCA, choice = "var", axes = 1:5)
+fviz_cos2(df_PCA, choice = "var", axes = 1:6)
 ```
 
 ## Separación de los datos
@@ -258,13 +258,18 @@ fviz_cos2(df_PCA, choice = "var", axes = 1:5)
 Se escoge repartir los datos de forma aleatoria en 2 subsets, uno de entrenamiento y otro para comprobar posteriormente los modelos frente a los datos originales. Dividimos también el *dataset* sin victorias. El *split* se hace un 80-20 para cada uno de los *datasets*.
 
 ```{r}
-mark1 <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
-train <- df[mark1, ]
-test <- df[!mark1, ]
+mark <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
+train <- df[mark, ]
+test <- df[!mark, ]
 
-mark2 <- sample(c ( TRUE , FALSE ), nrow (df_nowins), replace = TRUE , prob = c (0.8, 0.2))
-train_nowins <- df_nowins[mark2, ]
-test_nowins <- df_nowins[!mark2, ]
+train_nowins <- df_nowins[mark, ]
+test_nowins <- df_nowins[!mark, ]
+
+train_asFactor <- train
+train_asFactor$blueWins <- as.factor(train_asFactor$blueWins)
+
+test_asFactor <- test
+test_asFactor$blueWins <- as.factor(test_asFactor$blueWins)
 ```
 
 # Modelos escogidos
@@ -277,8 +282,8 @@ Se usa la función *glm()* (modelo lineal general) y especificamos *family = “
 
 
 ```{r}
-model_glm <- glm( blueWins ~ .,family = "binomial", data = train)
-summary(model_glm)
+model_GLM <- glm( blueWins ~ .,family = "binomial", data = train_asFactor)
+summary(model_GLM)
 ```
 
 
@@ -286,7 +291,7 @@ Se puede observar que las variables con mayores p-valor son aquellas que son má
 
 Para comprobar cúanto se ajusta el modelo a los datos, se usa R^2^ de McFadden:
 ```{r}
-pscl::pR2(model_glm)["McFadden"]
+pscl::pR2(model_GLM)["McFadden"]
 ```
 
 El R^2^ de McFadden de valores entre 0.2 y 0.4 indican que el modelo se ajusta [muy bien a los datos ](https://eml.berkeley.edu/~mcfadden/travel.html), puesto que inferior a 0.2 es que el modelo está muy alejado, y más de 0.4 es que el modelo se ajusta de más, dando lugar a *overfitting*.
@@ -310,6 +315,16 @@ car::vif(model_glm)
 ```
 
 Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, es posible que se deba rehacer este modelo haciendo un tratamiento distinto, pero en principio la cadena lógica que nos lleva a elegir esta variables se mantiene, puesto que las que más problemas de colinealidad presentan son las que se han previsto en la [Exploración de Datos](#variables-correlacionadas-restantes).
+
+```{r}
+prediction_LR <- predict.glm(model_glm, test_asFactor, type = "response")
+absolutes <- 1*(prediction_LR>=0.5)
+absolutes <- as.factor(absolutes)
+metrics_GLM <- confusionMatrix(test_asFactor$blueWins, absolutes)
+metrics_GLM
+```
+
+
 
 ## Naive - Bayes
 
@@ -371,13 +386,14 @@ rules
 
 Hacemos la matriz de confusión de el modelo de árbol.
 ```{r}
-pred <- predict(object = model_tree, test[-1],type = "class")
-confusionMatrix(table(test$blueWins, pred))
+prediction_BN <- predict(object = model_tree, test[-1],type = "class")
+confusionMatrix(table(test$blueWins, prediction_BN))
 ```
 
 Se muestra una tasa de acierto del 72%. 
 
 # Métricas
+
 
 
 
