@@ -83,7 +83,6 @@ El *dataset* ha sido obtenido de forma pública y se puede consultar en [Kaggle]
 ## Librerías y semilla
 
 A continuación se descargan e instalan las librerías de R y se establece una semilla para garantizar que se puede repetir el ejercicio.
-
 ```{r, results = FALSE, warning = FALSE, message = FALSE}
 library(caret)
 library(caretEnsemble)
@@ -110,13 +109,12 @@ library(rpart.plot)
 library(tidyverse)
 
 set.seed(123)
-# set.seed(888)
+# set.seed(888) con esta semilla pasan cosas
 ```
 
 ## Carga de datos:
 
 Los datos de origen vienen en un CSV, y RStudio permite hacer una carga sin mayores transformaciones gracias a la librería [*readr*](https://cran.r-project.org/web/packages/readr/readme/README.html).
-
 ```{r}
 df <- read_csv("data/high_diamond_ranked_10min.csv")
 ```
@@ -127,19 +125,16 @@ df <- read_csv("data/high_diamond_ranked_10min.csv")
 ## Primer contacto
 
 Se muestran las primeras líneas del *dataset*.
-
 ```{r}
 head(df)
 ```
 
 Se observa que hay 40 variables en el *dataset*, y a simple vista todas son numéricas. No obstante, se usa *str()* para obtener una descripción precisa sobre los tipos de variables.
-
 ```{r, max.height='200px'}
 str(df)
 ```
 
 Se aprecia que son todas de tipo 'num'. Para algunas funcionalidades de R será necesario tranformarlo a tipo factor pero se abordará sólo donde sea necesario. Se prosigue comprobando si hay elementos vacíos en el *dataset*.
-
 ```{r, max.height='200px'}
 colSums(is.na(df))
 ```
@@ -147,7 +142,6 @@ colSums(is.na(df))
 No hay datos faltantes, por lo que el dataset es íntegro para seguir trabajando y no es necesario hacer tratamiento de faltantes.
 
 Miramos propiedades generales de las variables con *describe()* del paquete [*psych*](https://www.rdocumentation.org/packages/psych/versions/2.3.3/topics/describe).
-
 ```{r, max.height='200px'}
 describe(df)
 ```
@@ -157,19 +151,16 @@ describe(df)
 En base a mi conocimiento del funcionamiento del juego, hay variables que a simple vistazo van a tener gran correlación, por cómo se estructura el *dataset* y las reglas intrínsecas del propio *League of Legends*.
 
 La columna *gameId* no aporta información puesto que no guarda nada mas allá que para cuantificar las partidas en los servidores de *Riot Games*, se puede quitar sin mayor impacto.
-
 ```{r}
 df <- df[,-1]
 ```
 
 Por cómo funciona el juego, en este *dataset* hay muchas columnas con información redundante, puesto que si un equipo se hace una baja (*blueKill*), se corresponde con que el equipo rojo obtiene una muerte (*redDeaths*), por lo que esas columnas siempre van a contener información complementaria (*Discalimer:* soy plenamente consciente que es posible ejecutarse en el juego, pero son un caso ínfimo y que no varía el oro de la partida, por lo que al quitar las columnas de las muertes no alteramos ninguna de las otras).
-
 ```{r}
 df <- df[,!names(df) %in% c("blueDeaths", "redDeaths")]
 ```
 
 De forma análoga, por las características del *dataset*, los datos están limitados a los primeros 10 minutos de la partida, por lo que también se pueden eliminar las columnas *PerMin* puesto que van a estar directamente correladas con columnas de su misma métrica. Las columnas que muestran un diferencial de oro o experiencia también se pueden suprimir en favor de los valores totales (*blueTotalGold*, y *redTotalGold*).
-
 ```{r}
 df <- df[,!names(df) %in% c("blueCSPerMin",      "redCSPerMin",
                             "blueGoldPerMin",    "redGoldPerMin",
@@ -179,13 +170,11 @@ df <- df[,!names(df) %in% c("blueCSPerMin",      "redCSPerMin",
 ```
 
 Por último, este dataset agrupaba los [Monstruos Épicos](https://leagueoflegends.fandom.com/wiki/Category:Epic_monsters) en una misma columna, se ha decidido conservar con los datos por separado (*blueDragons, blueHeralds, redDragons, redHeralds*) para valorar si priorizar un objetivo u otro es determinante a la hora de ganar o perder.
-
 ```{r}
 df <- df[,!names(df) %in% c("blueEliteMonsters", "redEliteMonsters")]
 ```
 
 Se buscan correlaciones entre las variables que quedan:
-
 ```{r}
 corr_first <- round(cor(df), 1)
 ggcorrplot( corr_first,
@@ -198,13 +187,11 @@ ggcorrplot( corr_first,
 ```
 
 Se puede observar que *blueAVGlevel* tiene una correlación muy alta con *blueTotalExperience*, y sus contrapartidas del equipo rojo *redAVGLevel* y *redTotalExperience*, una vez más una está en función de la otra (*TotalExperience* = 5 \* *AVGLevel* \* experiencia necesaria para subir de nivel). Entonces, se elige una de las 2 para representar este dato, en esta caso los valores totales, quitando los promedios.
-
 ```{r}
 df <- df[,!names(df) %in% c("blueAVGLevel", "redAVGLevel")]
 ```
 
 La columna *redFirstBlood* es la contraparte de *blueFirstBlood* (puesto que si no consigue un equipo la primera sangre la consigue el otro), se suprime la variable del equipo rojo para seguir la misma estructura en todo el *dataset* al tener sólo *blueWins*, que es la variable a predecir (no existe *redWins* en el *dataset* porque precisamente sería la contraparte).
-
 ```{r}
 df <- df[,!names(df) %in% c("redFirstBlood")]
 ```
@@ -214,7 +201,6 @@ df <- df[,!names(df) %in% c("redFirstBlood")]
 Cabe destacar una correlación natural entre *blueKills* y *blueTotalGold* (y sus contrapartidas *redKills* y *redTotalGold*), puesto que cada *kill* da 300 de oro, pero al haber más formas de conseguir oro en el juego, no es pertinente eliminar ninguna de las dos.
 
 Se analiza la distribución, separando entre equipo rojo y equipo azul por claridad a la hora de mostrar los gráficos.
-
 ```{r, message = FALSE}
 df_sideBlue <- melt(df[1:14])
 df_sideRed <- melt(df[15:26])
@@ -233,7 +219,6 @@ Se puede ver que las variables tienen una distribución normal cuando se trata d
 Los "Dragones" y "Heraldos" son dicotómicas por las características del *dataset*, puesto que no pueden suceder más de 1 vez antes de la marca temporal de los 10min.
 
 Se hacen *boxplots* de los casos anómalos para encontrar *outliers* y decidir si se deben quitar.
-
 ```{r}
 boxplot(df[c("blueWardsPlaced","redWardsPlaced")])
 
@@ -249,14 +234,12 @@ Se comprueba que son datos plausibles dentro de cómo funciona *League of Legend
 Como continuación del proceso de limpieza y exploración de los datos, se realiza un Análisis de Componentes Principales (PCA). En caso de que fuese necesario, se usará un *dataset* con el PCA en un modelo para compararlo con el modelo escogido.
 
 Para hacer el análisis, se elimina la variable a predecir (*blueWins*).
-
 ```{r}
 df_noWins <- df[,-1]
 df_Wins <-df$blueWins
 ```
 
 Se normalizan las variables y volvemos a imprimir la matriz de correlación.
-
 ```{r, max.height='200px'}
 df_normalized <- scale(df_noWins)
 head(df_normalized)
@@ -274,14 +257,12 @@ ggcorrplot( corr_norm,
 ```
 
 Se observa una tabla con el comportamiento que se esperaba, con los problemas de colinealidad descritos en [el apartado anterior](#variables-correlacionadas-restantes). A continuación se hace un análisis de componentes principales del *dataset* normalizado.
-
 ```{r}
 df_PCA <- prcomp(corr_norm)
 summary(df_PCA)
 ```
 
 Con la gráfica a continuación se demuestra que 2 dimensiones ya explican un alto porcentaje de los datos.
-
 ```{r}
 fviz_eig(df_PCA, addlabels = TRUE)
 # get_eig(df_PCA)
@@ -290,13 +271,11 @@ fviz_eig(df_PCA, addlabels = TRUE)
 Con las 2 primeras variables se podría explicar casi todo el *dataset*, pero se eligen las primeras 5 para tener un alto porcentaje (84.8%) de explicación de la variabilidad.
 
 Con el gráfico a continuación se ilustra lo que aportan cada variable a las 5 dimensiones que se han elegido.
-
 ```{r}
 fviz_cos2(df_PCA, choice = "var", axes = 1:5)
 ```
 
 Se aprecia que hay un escalón a partir de *blueAssists*, por lo que se escogen todas las variables que tengan un cos2 superior a dicha (es decir, las que se encuentarn a la izquierda del gráfico)
-
 ```{r}
 df_appPCA <- df[,names(df) %in% c("redTotalGold",       "blueTotalGold",
                                   "redTotalExperience", "blueTotalExperience",
@@ -310,7 +289,6 @@ df_appPCA <- df[,names(df) %in% c("redTotalGold",       "blueTotalGold",
 ## Separación de los datos
 
 Se escoge repartir los datos de forma aleatoria en 2 subsets, uno de entrenamiento y otro para comprobar posteriormente los modelos frente a los datos originales. Dividimos también el *dataset* sin victorias. El *split* se hace un 80-20 para cada uno de los *datasets*. Tranformamos en factores la variable a predecir para garantizar el buen comportamiento de los paquetes de R.
-
 ```{r}
 mark <- sample(c ( TRUE , FALSE ), nrow (df), replace = TRUE , prob = c (0.8, 0.2))
 train <- df[mark, ]
@@ -343,8 +321,7 @@ Posteriormente en el apartado de Métricas se decidirá cuál es el más apto pa
 
 ### Modelo GLM
 
-Se usa la función *glm()* (modelo lineal general) y especificamos *family = "binomial"* para usar un modelo de regresión logística al *dataset*. La variable a predecir es *blueWins*
-
+Se usa la función *glm()* (modelo lineal general) y especificamos *family = "binomial"* para usar un modelo de regresión logística al *dataset*. La variable a predecir es *blueWins*.
 ```{r}
 model_GLM <- glm( blueWins ~ .,family = "binomial", data = train_asFactor)
 summary(model_GLM)
@@ -355,7 +332,6 @@ Se puede observar que las variables con mayores p-valor son aquellas que son má
 ### Ajuste del Modelo R^2^
 
 Para comprobar cúanto se ajusta el modelo a los datos, se usa R^2^ de McFadden:
-
 ```{r}
 pscl::pR2(model_GLM)["McFadden"]
 ```
@@ -365,7 +341,6 @@ El R^2^ de McFadden de valores entre 0.2 y 0.4 indican que el modelo se ajusta [
 ### Importancia de las variables y VIF
 
 A continuación, sacamos una tabla con la importancia de las variables:
-
 ```{r}
 glm_VarImp <- as.data.frame(caret::varImp(model_GLM))
 glm_VarImp <- data.frame(VarImp = glm_VarImp$Overall,
@@ -377,7 +352,6 @@ glm_VarImp
 ```
 
 Para comprobar si existen problemas de multicolinealidad, se usan los Factores de Inflación de Varianza (VIF).
-
 ```{r}
 sort(car::vif(model_GLM), decreasing = TRUE)
 ```
@@ -423,7 +397,6 @@ nb_VarImp
 ### Modelo de Árbol de decisión
 
 Se usa la librería [*rpart()*](https://cran.r-project.org/web/packages/rpart/index.html) para hacer un modelo de árbol de decisión.
-
 ```{r}
 model_BT <- rpart(blueWins~.,
               data = train,
@@ -434,7 +407,6 @@ rpart.plot(model_BT, nn=TRUE)
 ### Reglas de decisión
 
 En la tabla a continuación se muestran las reglas que sigue el árbol a la hora de decidir.
-
 ```{r}
 rules_BT <- rpart.rules(model_BT)
 row.names(rules_BT) <- NULL
@@ -479,7 +451,6 @@ cat("Exactitud del modelo Naive Bayes: ", acc_NB, "%.\n")
 ## Métricas del modelo de Árbol de decisión
 
 Hacemos la matriz de confusión del modelo de árbol.
-
 ```{r}
 prediction_BT <- predict(object = model_BT, test[-1], type = "class")
 metrics_BT <- confusionMatrix(table(test$blueWins, prediction_BT))
@@ -495,7 +466,6 @@ cat("Exactitud del modelo Árbol de Decisión: ", acc_BT, "%.\n")
 ## Comparación de las métricas
 
 Los 3 modelos tienen una exactitud similar, pero el modelo de [Regresión Logística](#regresión-logística) tiene el valor superior al resto. A continuación una tabla que agrupa las 3 exactitudes.
-
 ```{r}
 metrics_table <- matrix(c(acc_GLM, acc_NB, acc_BT),ncol = 1, byrow = TRUE)
 rownames(metrics_table) <- c("Regresión Logística", "Naive Bayes", "Binary Tree")
@@ -527,15 +497,13 @@ summary(model_GLMPCA)
 ```
 
 Para comprobar cúanto se ajusta el modelo a los datos, se usa R^2^ de McFadden:
-
 ```{r}
 pscl::pR2(model_GLMPCA)["McFadden"]
 ```
 
 ## Métricas del modelo RL con PCA
 
-Tabla de confusión del modelo con PCA:
-
+Matriz de confusión del modelo con PCA:
 ```{r}
 prediction_GLMPCA <- predict.glm(model_GLMPCA, test_appPCA, type = "response")
 absolutes_LRPCA <- 1*(prediction_GLMPCA>=0.5)
