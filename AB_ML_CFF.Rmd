@@ -19,6 +19,7 @@ output:
   html_notebook: default
   word_document: default
 ---
+
 ```{r}
 # knitr::opts_chunk$set(include = FALSE)
 ```
@@ -49,7 +50,6 @@ La arena se conoce como "La Grieta del Invocador" y toma esta estructura (simpli
 
 -   El resto del mapa que no es ni una "base" ni una "calle" (en verde oscuro en la imagen) se conoce como "jungla", en la cual hay monstruos neutrales (los cuales se comportan como los "súbditos" mencionados anteriormente) y objetivos importantes para acabar la partida como los "Dragones", "Heraldos" y "Barón Nashor". Estos objetivos proporcionan mejoras al equipo que los reclame.
 
-
 ![Grieta del Invocador (simplificada)](data/rsz_summonersrift.jpg)
 
 [Original PNG version by Raizin, SVG rework by Sameboat](https://commons.wikimedia.org/w/index.php?curid=29443207)
@@ -58,15 +58,19 @@ Los "campeones" por defecto no pueden ver todas las zonas del mapa (y algunos "c
 
 En *League of Legends* es posible rendirse si al menos 4/5 de los integrantes del equipo están dispuestos a ello en el minuto 20 de partida, existiendo una ocasión extraordinaria a los 15 minutos si dicha rendición es **unánime.**
 
-Por otra parte, [*Mobalytics*](https://mobalytics.gg/) es una empresa que desarrolla *software* a modo de *overlay* (*software* que se ejecuta mientras juegas para anadirte información) sobre distintos títulos de *Riot Games*, incluido el *League of Legends*. Esta empresa recopila datos sobre sus usuarios y el desempeño en sus partidas de cara a proporcionar mejores guías e indicadores para que sus usuarios puedan mejorar en el videojuego.
+Este título se ha coronado como uno de los videjuegos con más jugadores concurrentes, con una cifra de [152 millones](https://activeplayer.io/league-of-legends/) de jugadoderes a día de hoy. Estas cifras han hecho que este juego tenga mucha actividad a su alrededor, y mucha actividad económica se haya desarrollado en su ecosistema, como merchandising no-oficial, o aplicaciones de terceros.
 
-Este *overlay* necesita conocer qué datos son más determinantes de cara a predecir si la partida se puede ganar o no, de cara a mostrar a sus usuarios si votar rendirse o no.
+[*Mobalytics*](https://mobalytics.gg/) es una empresa que desarrolla *software* a modo de *overlay* (*software* que se ejecuta mientras juegas para anadirte información) sobre distintos títulos de *Riot Games*, incluido el *League of Legends*. Esta empresa recopila datos sobre sus usuarios y el desempeño en sus partidas de cara a proporcionar mejores guías e indicadores para que sus usuarios puedan mejorar en el videojuego.
+
+Este *overlay* necesita conocer qué datos son más determinantes de cara a predecir si la partida se puede ganar o no, de cara a mostrar a sus usuarios si votar rendirse porque la partida está **inevitablemente perdida**, o si por el contrario todavía hay un tanto por ciento suficiente de posibilidades de  victoria como para que merezca la pena seguir jugando.
+
 
 # Descripción del problema
 
-Con esta introducción simplificada del funcionamiento del videojuego, se  entiende que existen muchas variables que dan ventaja a un equipo u otro. Aunque el objetivo final sea inequívoco para ganar la partida (derribar el nexo enemigo), hay muchas otras variables no tan directas como "Nexo destruido: Sí o No" que hay que tener en cuenta para dictaminar *a priori* qué va a pasar en los minutos siguientes.
+Con esta introducción simplificada del funcionamiento del videojuego, se ilustra que existen muchas variables que dan ventaja a un equipo u otro. Aunque el objetivo final sea inequívoco para ganar la partida (derribar el nexo enemigo), hay muchas otras variables no tan directas como "Nexo destruido: Sí o No" que hay que tener en cuenta para dictaminar *a priori* qué va a pasar en los minutos siguientes, y poder predecir qué resultado va a tener la partida antes de derribar el nexo.
 
-El objetivo final en este informe es escoger un modelo de *machine learning* que prediga qué equipo va a ganar una partida en función de qué haya sucedido en la misma, asimismo como decidir cuáles son las variables más determinantes en dicho modelo.
+La amplia popularidad de este videjouego hace que sea muy factibl extraer datos del mismo, ya que dispone de API pública, por lo que tendremos a disposición las variables cualesquiera que necesitemos. El objetivo en este informe es escoger un modelo de *machine learning* que prediga qué equipo va a ganar una partida en función de qué haya sucedido en la misma, asimismo como decidir cuáles son las variables más determinantes en dicho modelo.
+
 
 # Análisis en R
 
@@ -117,6 +121,7 @@ Los datos de origen vienen en un CSV, y RStudio permite hacer una carga sin mayo
 df <- read_csv("data/high_diamond_ranked_10min.csv")
 ```
 
+
 # Exploración y limpieza de los datos
 
 ## Primer contacto
@@ -157,7 +162,7 @@ La columna *gameId* no aporta información puesto que no guarda nada mas allá q
 df <- df[,-1]
 ```
 
-Por cómo funciona el juego, en este *dataset*  hay muchas columnas con información redundante, puesto que si un equipo se hace una baja (*blueKill*), se corresponde con que el equipo rojo obtiene una muerte (*redDeaths*), por lo que esas columnas siempre van a contener información complementaria (*Discalimer:* soy plenamente consciente que es posible ejecutarse en el juego, pero son un caso ínfimo y que no varía el oro de la partida, por lo que al quitar las columnas de las muertes no alteramos ninguna de las otras).
+Por cómo funciona el juego, en este *dataset* hay muchas columnas con información redundante, puesto que si un equipo se hace una baja (*blueKill*), se corresponde con que el equipo rojo obtiene una muerte (*redDeaths*), por lo que esas columnas siempre van a contener información complementaria (*Discalimer:* soy plenamente consciente que es posible ejecutarse en el juego, pero son un caso ínfimo y que no varía el oro de la partida, por lo que al quitar las columnas de las muertes no alteramos ninguna de las otras).
 
 ```{r}
 df <- df[,!names(df) %in% c("blueDeaths", "redDeaths")]
@@ -239,7 +244,7 @@ boxplot(df[c("blueTowersDestroyed","redTowersDestroyed")])
 
 Se comprueba que son datos plausibles dentro de cómo funciona *League of Legends*, se podría valorar quitarlos si posteriormente perjudicasen al modelo. El caso más preocupante serían las partidas donde se tiran más de 2 torres al minuto 10, pero de momento no se van a sacar del *dataset*.
 
-## Análisis de Componentes Principales
+## Análisis de Componentes Principales {#análisis-de-componentes-principales}
 
 Como continuación del proceso de limpieza y exploración de los datos, se realiza un Análisis de Componentes Principales (PCA). En caso de que fuese necesario, se usará un *dataset* con el PCA en un modelo para compararlo con el modelo escogido.
 
@@ -284,11 +289,12 @@ fviz_eig(df_PCA, addlabels = TRUE)
 
 Con las 2 primeras variables se podría explicar casi todo el *dataset*, pero se eligen las primeras 5 para tener un alto porcentaje (84.8%) de explicación de la variabilidad.
 
-Con el gráfico a continuación se ilustra lo que aportan cada variable a las 6 dimensiones que se han elegido.
+Con el gráfico a continuación se ilustra lo que aportan cada variable a las 5 dimensiones que se han elegido.
 
 ```{r}
 fviz_cos2(df_PCA, choice = "var", axes = 1:5)
 ```
+
 Se aprecia que hay un escalón a partir de *blueAssists*, por lo que se escogen todas las variables que tengan un cos2 superior a dicha (es decir, las que se encuentarn a la izquierda del gráfico)
 
 ```{r}
@@ -299,7 +305,7 @@ df_appPCA <- df[,names(df) %in% c("redTotalGold",       "blueTotalGold",
                                   "redAssists",         "blueAssists",
                                   "blueWins"
                                   )]
-```     
+```
 
 ## Separación de los datos
 
@@ -320,11 +326,22 @@ test_asFactor <- test
 test_asFactor$blueWins <- as.factor(test_asFactor$blueWins)
 ```
 
+
 # Modelos escogidos
 
-En este trabajo se tratan 3 modelos distintos de *Machine Learning*, posteriormente en el apartado de métricas se decidirá cuál es el más apto para la resolución del problema.
+En este trabajo se tratan 3 modelos distintos de *Machine Learning*:
 
-## Regresión Logística
+1.  [Regresión Logística](#regresión-logística)
+
+2.  [Naive Bayes](#naive-bayes)
+
+3.  [Árbol de Decisión](#árbol-de-decisión)
+
+Posteriormente en el apartado de Métricas se decidirá cuál es el más apto para la resolución del problema.
+
+## Regresión Logística 
+
+### Modelo GLM
 
 Se usa la función *glm()* (modelo lineal general) y especificamos *family = "binomial"* para usar un modelo de regresión logística al *dataset*. La variable a predecir es *blueWins*
 
@@ -335,6 +352,8 @@ summary(model_GLM)
 
 Se puede observar que las variables con mayores p-valor son aquellas que son más importantes a la hora de ganar una partida, representadas con asteriscos en el resumen del modelo.
 
+### Ajuste del Modelo R^2^
+
 Para comprobar cúanto se ajusta el modelo a los datos, se usa R^2^ de McFadden:
 
 ```{r}
@@ -342,6 +361,8 @@ pscl::pR2(model_GLM)["McFadden"]
 ```
 
 El R^2^ de McFadden de valores entre 0.2 y 0.4 indican que el modelo se ajusta [muy bien a los datos](https://eml.berkeley.edu/~mcfadden/travel.html), puesto que inferior a 0.2 es que el modelo está muy alejado, y más de 0.4 es que el modelo se ajusta de más, dando lugar a *overfitting*.
+
+### Importancia de las variables y VIF
 
 A continuación, sacamos una tabla con la importancia de las variables:
 
@@ -363,6 +384,8 @@ sort(car::vif(model_GLM), decreasing = TRUE)
 
 Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, es posible que se deba rehacer este modelo haciendo un tratamiento distinto, pero en principio la cadena lógica que nos lleva a elegir esta variables se mantiene, puesto que las que más problemas de colinealidad presentan son las que se han previsto en la [Exploración de Datos](#variables-correlacionadas-restantes).
 
+En el apartado de [métricas](#metricas-del-modelo-de-regresión-logistica) haremos más análisis a este modelo.
+
 ## Naive Bayes
 
 ```{r}
@@ -374,16 +397,17 @@ y_train_NB <- train_NB$blueWins
 
 ```
 
+### Modelo Naive Bayes
+
 ```{r, warning=FALSE}
 
 model_NB = caret::train(x_train_NB, y_train_NB, 'naive_bayes', trControl=trainControl(method='cv',number=10))
 model_NB
 ```
 
+En el apartado [métricas](#metricas-del-modelo-de-naive-bayes) lo compararemos con otros modelos.
 
-En el apartado métricas lo compararemos con otros modelos.
-
-Importancia de las variables:
+### Importancia de las variables
 
 ```{r}
 nb_VarImp <- as.data.frame(caret::filterVarImp(model_NB$trainingData, y_train_NB, nonpara = TRUE))
@@ -396,6 +420,8 @@ nb_VarImp
 
 ## Árbol de decisión
 
+### Modelo de Árbol de decisión
+
 Se usa la librería [*rpart()*](https://cran.r-project.org/web/packages/rpart/index.html) para hacer un modelo de árbol de decisión.
 
 ```{r}
@@ -405,6 +431,8 @@ model_BT <- rpart(blueWins~.,
 rpart.plot(model_BT, nn=TRUE)
 ```
 
+### Reglas de decisión
+
 En la tabla a continuación se muestran las reglas que sigue el árbol a la hora de decidir.
 
 ```{r}
@@ -413,10 +441,12 @@ row.names(rules_BT) <- NULL
 rules_BT
 ```
 
+En el apartado de [métricas](#metricas-del-modelo-de-árbol-de-decisión) haremos más análisis a este modelo.
+
+
 # Métricas
 
 ## Métricas del modelo de Regresión Logística
-
 
 ```{r}
 prediction_GLM <- predict.glm(model_GLM, test_asFactor, type = "response")
@@ -426,19 +456,20 @@ metrics_GLM <- confusionMatrix(test_asFactor$blueWins, absolutes_LR)
 metrics_GLM
 ```
 
+
 ```{r}
 acc_GLM <- accuracy(test$blueWins, absolutes_LR)
 cat("Exactitud del modelo Regresión Logística: ", acc_GLM, "%.\n")
 ```
 
-
-## Métricas del modelo de Naive Bayes 
+## Métricas del modelo de Naive Bayes
 
 ```{r, warning=FALSE}
 prediction_NB <- predict(model_NB, newdata = test_NB )
 metrics_NB <- caret::confusionMatrix(prediction_NB, test_NB$blueWins)
 metrics_NB
 ```
+
 
 ```{r}
 acc_NB <- accuracy(test_NB$blueWins, prediction_NB)
@@ -460,8 +491,9 @@ metrics_BT
 acc_BT <- accuracy(test$blueWins, prediction_BT)
 cat("Exactitud del modelo Árbol de Decisión: ", acc_BT, "%.\n")
 ```
+
 ## Comparación de las métricas
- 
+
 Los 3 modelos tienen una exactitud similar, pero el modelo de [Regresión Logística](#regresión-logística) tiene el valor superior al resto. A continuación una tabla que agrupa las 3 exactitudes.
 
 ```{r}
@@ -472,6 +504,7 @@ colnames(metrics_table) <- c("Exactitud (%)")
 metrics_table <- as.table(metrics_table)
 metrics_table
 ```
+
 Al tener unas exactitudes muy similares, se elige repetir el modelo más exitoso con el dataset sobre el que se ha hecho el [Análisis de Componentes Principales](#análisis-de-componentes-principales)
 
 # Modelo de Regresión Logística con PCA
@@ -492,10 +525,13 @@ test_appPCA$blueWins <- as.factor(test_TEMP$blueWins)
 model_GLMPCA <- glm( blueWins ~ .,family = "binomial", data = train_appPCA)
 summary(model_GLMPCA)
 ```
+
 Para comprobar cúanto se ajusta el modelo a los datos, se usa R^2^ de McFadden:
+
 ```{r}
 pscl::pR2(model_GLMPCA)["McFadden"]
 ```
+
 ## Métricas del modelo RL con PCA
 
 Tabla de confusión del modelo con PCA:
@@ -507,23 +543,21 @@ absolutes_LRPCA <- as.factor(absolutes_LRPCA)
 metrics_GLMPCA <- confusionMatrix(test_appPCA$blueWins, absolutes_LRPCA)
 metrics_GLMPCA
 ```
-no es mejora sustancial así que no nos lo quedamos
 
-
+Este modelo **no** es mejora sustancial así que no nos lo quedamos
 
 ## Curva ROC del RL con PCA
 
 ```{r}
-roc_score=roc(test_appPCA$blueWins, prediction_GLM)
-plot(roc_score ,main ="ROC Curve from Logistic Regresion Model")
+roc_score = roc(test_appPCA$blueWins, prediction_GLM)
+plot(roc_score, main = "ROC Curve from Logistic Regresion Model")
 ```
 
-Se aleja de la diagonal 
-
+Se aleja de la diagonal
 
 # Conclusiones
 
+Yo pretendo minimizar los falsos positivos, es decir, los casos que me prediga una victoria y resulte ser una derrota-> Sensitividad?
+porque jugar para acabar perdiendo o sufriendo por una partida agónica y acabar perdiendo es una sensación frustrante.
+
 El modelo que más nos conviene sigue siendo el modelo de [Regresión Logística](#regresión-logistica), y su curva ROC es buena. es el más parsimonioso y ninguno de los modelos más complejos tiene mejora significativa.
-
-
- 
