@@ -69,7 +69,7 @@ Este *overlay* necesita conocer qué datos son más determinantes de cara a pred
 
 Con esta introducción simplificada del funcionamiento del videojuego, se ilustra que existen muchas variables que dan ventaja a un equipo u otro. Aunque el objetivo final sea inequívoco para ganar la partida (derribar el nexo enemigo), hay muchas otras variables no tan directas como "Nexo destruido: Sí o No" que hay que tener en cuenta para dictaminar *a priori* qué va a pasar en los minutos siguientes, y poder predecir qué resultado va a tener la partida antes de derribar el nexo.
 
-La amplia popularidad de este videjouego hace que sea muy factibl extraer datos del mismo, ya que dispone de API pública, por lo que tendremos a disposición las variables cualesquiera que necesitemos. El objetivo en este informe es escoger un modelo de *machine learning* que prediga qué equipo va a ganar una partida en función de qué haya sucedido en la misma, asimismo como decidir cuáles son las variables más determinantes en dicho modelo.
+La amplia popularidad de este videjouego hace que sea muy factible extraer datos del mismo, ya que dispone de API pública, por lo que tendremos a disposición las variables cualesquiera que necesitemos. El objetivo en este informe es escoger un modelo de *machine learning* que prediga qué equipo va a ganar una partida en función de qué haya sucedido en la misma, asimismo como decidir cuáles son las variables más determinantes en dicho modelo.
 
 
 # Análisis en R
@@ -96,7 +96,6 @@ library(ggcorrplot)
 library(ggplot2)
 library(ISLR)
 library(Metrics)
-library(pls)
 library(pscl)
 library(pROC)
 library(psych)
@@ -239,15 +238,10 @@ df_noWins <- df[,-1]
 df_Wins <-df$blueWins
 ```
 
-Se normalizan las variables y volvemos a imprimir la matriz de correlación.
-```{r, max.height='200px'}
-df_normalized <- scale(df_noWins)
-head(df_normalized)
-```
-
-```{r,}
-corr_norm <- cor(df_normalized)
-ggcorrplot( corr_norm,
+A continuación se buscan nuevamente correlaciones después de la limpieza de datos
+```{r}
+corr_post <- cor(df_noWins)
+ggcorrplot( corr_post,
             hc.order = TRUE,
             type = "lower",
             outline.col = "white",
@@ -256,35 +250,43 @@ ggcorrplot( corr_norm,
           )   + ggtitle("Correlation Matrix After Data Cleaning")
 ```
 
-Se observa una tabla con el comportamiento que se esperaba, con los problemas de colinealidad descritos en [el apartado anterior](#variables-correlacionadas-restantes). A continuación se hace un análisis de componentes principales del *dataset* normalizado.
+Se observa una tabla con el comportamiento que se esperaba, con los problemas de colinealidad descritos en [el apartado anterior](#variables-correlacionadas-restantes). A continuación se hace un análisis de componentes principales del *dataset*, normalizándolo.
 ```{r}
-df_PCA <- prcomp(corr_norm)
+df_PCA <- prcomp(corr_post, scale = TRUE)
 summary(df_PCA)
-```
 
-Con la gráfica a continuación se demuestra que 2 dimensiones ya explican un alto porcentaje de los datos.
+```
+Se puede contemplar en la columna *'Cummulative Proportion'* que los 2 primeros componentes explican gran parte de los datos, y que a partir del 6 componente el porcentaje acumulado es ínfimo. Con la gráfica a continuación, gracias a la función [*fviz_eig()*](https://www.rdocumentation.org/packages/factoextra/versions/1.0.7/topics/eigenvalue) del paquete *factoextra*, se ilustra lo que acabamos de mencionar con las proporciones de varianza acumuladas.
 ```{r}
 fviz_eig(df_PCA, addlabels = TRUE)
 # get_eig(df_PCA)
 ```
 
-Con las 2 primeras variables se podría explicar casi todo el *dataset*, pero se eligen las primeras 5 para tener un alto porcentaje (84.8%) de explicación de la variabilidad.
+Con los 2 primeros componentes se podría explicar casi todo el *dataset*, pero se eligen los primeros 8 para tener un alto porcentaje (84.8%) de explicación de la variabilidad.
 
-Con el gráfico a continuación se ilustra lo que aportan cada variable a las 5 dimensiones que se han elegido.
+Con el gráfico a continuación se ilustra lo que aportan cada variable a las 8 dimensiones que se han elegido.
 ```{r}
-fviz_cos2(df_PCA, choice = "var", axes = 1:5)
+fviz_cos2(df_PCA, choice = "var", axes = 1:8)
+```
+Se ilustra un biplot (con la función [*fviz_pca_biplot()*](https://www.rdocumentation.org/packages/factoextra/versions/1.0.7/topics/fviz_pca) en específico, la cual mejora en legibilidad) para ver con más claridad la relación entre cos2 con las 2 primeras dimensiones del PCA. 
+```{r}
+fviz_pca_biplot(df_PCA,
+                label = "var",
+                repel = TRUE,
+                col.ind = "black",
+                col.var = "contrib",
+                habillage = "none",
+                gradient.cols = c("yellow","orange","red","purple"),
+                title = "PCA - Biplot con gradiente en función de cos2"
+               )
+```
+Se prosigue con una muestra de los *eigenvalues* de cada variable contra cada componente principal. Se ha invesigado al respecto y R calcula los vectores y valores con el signo "opuesto" al intuitivo, mas cambiar un vector de signo sólo cambia su orientación y no su magnitud. 
+```{r, max.height='200px'}
+df_PCA$x
 ```
 
-Se aprecia que hay un escalón a partir de *blueAssists*, por lo que se escogen todas las variables que tengan un cos2 superior a dicha (es decir, las que se encuentarn a la izquierda del gráfico)
-```{r}
-df_appPCA <- df[,names(df) %in% c("redTotalGold",       "blueTotalGold",
-                                  "redTotalExperience", "blueTotalExperience",
-                                  "redKills",           "blueKills",
-                                  "redAVGLevel",        "blueAVGLevel",
-                                  "redAssists",         "blueAssists",
-                                  "blueWins"
-                                  )]
-```
+Se puede comprobar como en el primer componente todos los valores del equipo rojo (el contrario a la variable a predecir, *blueWins*) tienen un valor negativo, puesto que cuantos más recursos obtenga el equipo contrario, más dificil será ganar una partida.
+
 
 ## Separación de los datos
 
@@ -315,7 +317,7 @@ En este trabajo se tratan 3 modelos distintos de *Machine Learning*:
 
 3.  [Árbol de Decisión](#árbol-de-decisión)
 
-Posteriormente en el apartado de Métricas se decidirá cuál es el más apto para la resolución del problema.
+Posteriormente en el apartado de [Métricas](#métricas) se decidirá cuál es el más apto para la resolución del problema.
 
 ## Regresión Logística 
 
@@ -373,6 +375,8 @@ y_train_NB <- train_NB$blueWins
 
 ### Modelo Naive Bayes
 
+
+
 ```{r, warning=FALSE}
 
 model_NB = caret::train(x_train_NB, y_train_NB, 'naive_bayes', trControl=trainControl(method='cv',number=10))
@@ -420,6 +424,7 @@ En el apartado de [métricas](#metricas-del-modelo-de-árbol-de-decisión) harem
 
 ## Métricas del modelo de Regresión Logística
 
+Matriz de confusión y estadísiticas
 ```{r}
 prediction_GLM <- predict.glm(model_GLM, test_asFactor, type = "response")
 absolutes_LR <- 1*(prediction_GLM>=0.5)
@@ -428,7 +433,6 @@ metrics_GLM <- confusionMatrix(test_asFactor$blueWins, absolutes_LR)
 metrics_GLM
 ```
 
-
 ```{r}
 acc_GLM <- accuracy(test$blueWins, absolutes_LR)
 cat("Exactitud del modelo Regresión Logística: ", acc_GLM, "%.\n")
@@ -436,12 +440,12 @@ cat("Exactitud del modelo Regresión Logística: ", acc_GLM, "%.\n")
 
 ## Métricas del modelo de Naive Bayes
 
+Matriz de confusión y estadísiticas
 ```{r, warning=FALSE}
 prediction_NB <- predict(model_NB, newdata = test_NB )
 metrics_NB <- caret::confusionMatrix(prediction_NB, test_NB$blueWins)
 metrics_NB
 ```
-
 
 ```{r}
 acc_NB <- accuracy(test_NB$blueWins, prediction_NB)
@@ -450,13 +454,12 @@ cat("Exactitud del modelo Naive Bayes: ", acc_NB, "%.\n")
 
 ## Métricas del modelo de Árbol de decisión
 
-Hacemos la matriz de confusión del modelo de árbol.
+Matriz de confusión y estadísiticas
 ```{r}
 prediction_BT <- predict(object = model_BT, test[-1], type = "class")
 metrics_BT <- confusionMatrix(table(test$blueWins, prediction_BT))
 metrics_BT
 ```
-
 
 ```{r}
 acc_BT <- accuracy(test$blueWins, prediction_BT)
@@ -470,62 +473,61 @@ Los 3 modelos tienen una exactitud similar, pero el modelo de [Regresión Logís
 metrics_table <- matrix(c(acc_GLM, acc_NB, acc_BT),ncol = 1, byrow = TRUE)
 rownames(metrics_table) <- c("Regresión Logística", "Naive Bayes", "Binary Tree")
 colnames(metrics_table) <- c("Exactitud (%)")
-# to be added
+
 metrics_table <- as.table(metrics_table)
 metrics_table
 ```
 
-Al tener unas exactitudes muy similares, se elige repetir el modelo más exitoso con el dataset sobre el que se ha hecho el [Análisis de Componentes Principales](#análisis-de-componentes-principales)
+Usamos el PCA para hacer un modelo a expensas de encontrar mejores resultados
 
-# Modelo de Regresión Logística con PCA
 
-## Separación de datos
-
-```{r}
-train_appPCA <- df_appPCA[mark, ]
-test_appPCA <- df_appPCA[!mark, ]
-
-test_TEMP <- test_appPCA
-test_appPCA$blueWins <- as.factor(test_TEMP$blueWins)
-```
-
-## Modelo de Regresión Logística con el PCA aplicado
+# Modelo de Regresión logística con PCA 
 
 ```{r}
-model_GLMPCA <- glm( blueWins ~ .,family = "binomial", data = train_appPCA)
+model_GLMPCA <- caret::train(
+                             form = blueWins ~ ., 
+                             data = train_asFactor,
+                             trControl = trainControl(method = "cv", number = 10),
+                             method = "glm",
+                             family = "binomial",
+                             preProcess = c( "scale", "pca")
+                            )
 summary(model_GLMPCA)
 ```
 
-Para comprobar cúanto se ajusta el modelo a los datos, se usa R^2^ de McFadden:
-```{r}
-pscl::pR2(model_GLMPCA)["McFadden"]
-```
+# Métricas del Modelo de RL con PCA
 
-## Métricas del modelo RL con PCA
-
-Matriz de confusión del modelo con PCA:
 ```{r}
-prediction_GLMPCA <- predict.glm(model_GLMPCA, test_appPCA, type = "response")
-absolutes_LRPCA <- 1*(prediction_GLMPCA>=0.5)
-absolutes_LRPCA <- as.factor(absolutes_LRPCA)
-metrics_GLMPCA <- confusionMatrix(test_appPCA$blueWins, absolutes_LRPCA)
+acc_GLMPCA <- model_GLMPCA$results$Accuracy
+metrics_GLMPCA <- model_GLMPCA$results[,-1]
+rownames(metrics_GLMPCA) <- NULL
 metrics_GLMPCA
 ```
-
-Este modelo **no** es mejora sustancial así que no nos lo quedamos
-
-## Curva ROC del RL con PCA
+Es una mejora nimia respecto al anterior y su interpretabilidad es mucho más baja, puesto que perdemos las variables.
 
 ```{r}
-roc_score = roc(test_appPCA$blueWins, prediction_GLM)
-plot(roc_score, main = "ROC Curve from Logistic Regresion Model")
+metrics_table <- matrix(c(acc_GLMPCA, acc_GLM, acc_NB, acc_BT),ncol = 1, byrow = TRUE)
+rownames(metrics_table) <- c("Regresión Logística con PCA","Regresión Logística", "Naive Bayes", "Binary Tree")
+colnames(metrics_table) <- c("Exactitud (%)")
+
+metrics_table <- as.table(metrics_table)
+metrics_table
 ```
 
-Se aleja de la diagonal
+
+# Curva ROC del Modelo Escogido
+
+```{r, message = FALSE}
+roc_score = roc(test$blueWins, prediction_GLM)
+plot(roc_score, main = "ROC Curve from Logistic Regresion Model")
+
+```
+
+Se aleja de la diagonal lo suficiente dado las características del modelo.
 
 # Conclusiones
 
-Yo pretendo minimizar los falsos positivos, es decir, los casos que me prediga una victoria y resulte ser una derrota-> Sensitividad?
+Se pretende minimizar los falsos positivos, es decir, los casos que prediga una victoria y resulte ser una derrota-> Sensitividad?
 porque jugar para acabar perdiendo o sufriendo por una partida agónica y acabar perdiendo es una sensación frustrante.
 
 El modelo que más nos conviene sigue siendo el modelo de [Regresión Logística](#regresión-logistica), y su curva ROC es buena. es el más parsimonioso y ninguno de los modelos más complejos tiene mejora significativa.
