@@ -8,8 +8,6 @@ date: "May 17th, 2023"
 abstract: |
   Análisis en R de qué variables son más importantes a la hora de ganar una partida del aclamado título de *Riot Games*.
 output:
-  word_document: default
-  html_notebook: default
   html_document:
     number_sections: true
     theme: simplex
@@ -18,12 +16,9 @@ output:
     toc: true
     code_folding: show
     code_download: true
+  html_notebook: default
+  word_document: default
 ---
-
-```{r}
-# knitr::opts_chunk$set(include = FALSE)
-```
-
 ```{r, echo = FALSE, include = FALSE}
 # Esto es un bloque mágico que hará algunos output (en html) más manejables.
 options(width = 60)
@@ -56,11 +51,13 @@ La arena se conoce como "La Grieta del Invocador" y toma esta estructura (simpli
 
 Los "campeones" por defecto no pueden ver todas las zonas del mapa (y algunos "campeones" basan su identidad en no ser vistos, p. ej. *Shaco* o *Evelynn*), por lo que es necesario comprar "guardianes de visión" para colocar en las zonas de "jungla" y posteriormente en las zonas del mapa derribadas durante el transcurso de la partida.
 
+La mayoría de los eventos generan "oro", p. ej., la primera baja que suceda en la partida (*first Blood*) da 400 de "oro" al "campeón" que la reclame, una baja habitual da 300, romper una torre da 50 de oro a cada miembro del equipo y 100 al que la tire, un tótem da 20, etcétera.
+
 En *League of Legends* es posible rendirse si al menos 4/5 de los integrantes del equipo están dispuestos a ello en el minuto 20 de partida, existiendo una ocasión extraordinaria a los 15 minutos si dicha rendición es **unánime.**
 
-Este título se ha coronado como uno de los videjuegos con más jugadores concurrentes, con una cifra de [152 millones](https://activeplayer.io/league-of-legends/) de jugadoderes a día de hoy. Estas cifras han hecho que este juego tenga mucha actividad a su alrededor, y mucha actividad económica se haya desarrollado en su ecosistema, como merchandising no-oficial, o aplicaciones de terceros.
+Este título se ha coronado como uno de los videjuegos con más jugadores concurrentes, con una cifra de [152 millones](https://activeplayer.io/league-of-legends/) de jugadores a día de hoy. Estas cifras han hecho que este juego tenga mucha actividad a su alrededor, y mucha actividad económica se haya desarrollado en su ecosistema, como merchandising no-oficial, o aplicaciones de terceros.    
 
-[*Mobalytics*](https://mobalytics.gg/) es una empresa que desarrolla *software* a modo de *overlay* (*software* que se ejecuta mientras juegas para anadirte información) sobre distintos títulos de *Riot Games*, incluido el *League of Legends*. Esta empresa recopila datos sobre sus usuarios y el desempeño en sus partidas de cara a proporcionar mejores guías e indicadores para que sus usuarios puedan mejorar en el videojuego.
+[*Mobalytics*](https://mobalytics.gg/) es una empresa que desarrolla *software* a modo de *overlay* (*software* que se ejecuta mientras juegas para añadirte información) sobre distintos títulos de *Riot Games*, incluido el *League of Legends*. Esta empresa recopila datos sobre sus usuarios y el desempeño en sus partidas de cara a proporcionar mejores guías e indicadores para que sus usuarios puedan mejorar en el videojuego.
 
 Este *overlay* necesita conocer qué datos son más determinantes de cara a predecir si la partida se puede ganar o no, de cara a mostrar a sus usuarios si votar rendirse porque la partida está **inevitablemente perdida**, o si por el contrario todavía hay un tanto por ciento suficiente de posibilidades de  victoria como para que merezca la pena seguir jugando.
 
@@ -69,7 +66,7 @@ Este *overlay* necesita conocer qué datos son más determinantes de cara a pred
 
 Con esta introducción simplificada del funcionamiento del videojuego, se ilustra que existen muchas variables que dan ventaja a un equipo u otro. Aunque el objetivo final sea inequívoco para ganar la partida (derribar el nexo enemigo), hay muchas otras variables no tan directas como "Nexo destruido: Sí o No" que hay que tener en cuenta para dictaminar *a priori* qué va a pasar en los minutos siguientes, y poder predecir qué resultado va a tener la partida antes de derribar el nexo.
 
-La amplia popularidad de este videjouego hace que sea muy factible extraer datos del mismo, ya que dispone de API pública, por lo que tendremos a disposición las variables cualesquiera que necesitemos. El objetivo en este informe es escoger un modelo de *machine learning* que prediga qué equipo va a ganar una partida en función de qué haya sucedido en la misma, asimismo como decidir cuáles son las variables más determinantes en dicho modelo.
+La amplia popularidad de este videjouego hace que sea muy factible extraer datos de este, ya que dispone de API pública, por lo que tendremos a disposición las variables cualesquiera que necesitemos. El objetivo en este informe es escoger un modelo de *machine learning* que prediga qué equipo va a ganar una partida en función de qué haya sucedido en la misma, asimismo como decidir cuáles son las variables más determinantes en dicho modelo.
 
 
 # Análisis en R
@@ -185,7 +182,7 @@ ggcorrplot( corr_first,
           ) + ggtitle("Correlation Matrix")
 ```
 
-Se puede observar que *blueAVGlevel* tiene una correlación muy alta con *blueTotalExperience*, y sus contrapartidas del equipo rojo *redAVGLevel* y *redTotalExperience*, una vez más una está en función de la otra (*TotalExperience* = 5 \* *AVGLevel* \* experiencia necesaria para subir de nivel). Entonces, se elige una de las 2 para representar este dato, en esta caso los valores totales, quitando los promedios.
+Se puede observar que *blueAVGlevel* tiene una correlación muy alta con *blueTotalExperience*, y sus contrapartidas del equipo rojo *redAVGLevel* y *redTotalExperience*, una vez más una está en función de la otra (*TotalExperience* = 5 \* *AVGLevel* \* experiencia necesaria para subir de nivel). Entonces, se elige una de las 2 para representar este dato, en este caso los valores totales, quitando los promedios.
 ```{r}
 df <- df[,!names(df) %in% c("blueAVGLevel", "redAVGLevel")]
 ```
@@ -278,6 +275,9 @@ fviz_pca_biplot(df_PCA,
                 title = "PCA - Biplot con gradiente en función de cos2"
                )
 ```
+En este gráfico se pueden ver correlaciones ya descritas en la matriz, y con el gradiente las más oscuras son las que más contribuyen a las primeras 2 dimensiones.
+
+
 Se prosigue con una muestra de los *eigenvalues* de cada variable contra cada componente principal. Se ha [invesigado](https://stats.stackexchange.com/a/88882) al respecto y R calcula los vectores y valores con el signo "opuesto" al intuitivo, mas cambiar un vector de signo sólo cambia su orientación y no su magnitud. 
 ```{r, max.height='200px'}
 head(df_PCA$x)
@@ -356,9 +356,9 @@ Para comprobar si existen problemas de multicolinealidad, se usan los Factores d
 sort(car::vif(model_GLM), decreasing = TRUE)
 ```
 
-Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, es posible que se deba rehacer este modelo haciendo un tratamiento distinto, pero en principio la cadena lógica que nos lleva a elegir esta variables se mantiene, puesto que las que más problemas de colinealidad presentan son las que se han previsto en la [Exploración de Datos](#variables-correlacionadas-restantes).
+Como regla general, los valores de VIF por encima de 5 indican una multicolinealidad severa. Dado que hay varias que superan el 10, es posible que se deba rehacer este modelo haciendo un tratamiento distinto, pero en principio la cadena lógica que nos lleva a elegir estas variables se mantiene, puesto que las que más problemas de colinealidad presentan son las que se han previsto en la [Exploración de Datos](#variables-correlacionadas-restantes).
 
-En el apartado de [métricas](#metricas-del-modelo-de-regresión-logistica) haremos más análisis a este modelo.
+En el apartado de [métricas](#métricas-del-modelo-de-regresión-logistica) haremos más análisis a este modelo.
 
 ## Naive Bayes
 
@@ -380,7 +380,7 @@ model_NB = caret::train(x_train_NB, y_train_NB, 'naive_bayes', trControl=trainCo
 model_NB
 ```
 
-En el apartado [métricas](#metricas-del-modelo-de-naive-bayes) lo compararemos con otros modelos.
+En el apartado [métricas](#métricas-del-modelo-de-naive-bayes) se comparará con otros modelos.
 
 ### Importancia de las variables
 
@@ -414,14 +414,14 @@ row.names(rules_BT) <- NULL
 rules_BT
 ```
 
-En el apartado de [métricas](#metricas-del-modelo-de-árbol-de-decisión) haremos más análisis a este modelo.
+En el apartado de [métricas](#métricas-del-modelo-de-árbol-de-decisión) haremos más análisis a este modelo.
 
 
 # Métricas
 
 ## Métricas del modelo de Regresión Logística
 
-Matriz de confusión y estadísiticas
+Matriz de confusión y estadísiticas.
 ```{r}
 prediction_GLM <- predict.glm(model_GLM, test_asFactor, type = "response")
 absolutes_LR <- 1*(prediction_GLM>=0.5)
@@ -437,7 +437,7 @@ cat("Exactitud del modelo Regresión Logística: ", acc_GLM, "%.\n")
 
 ## Métricas del modelo de Naive Bayes
 
-Matriz de confusión y estadísiticas
+Matriz de confusión y estadísiticas.
 ```{r, warning=FALSE}
 prediction_NB <- predict(model_NB, newdata = test_NB )
 metrics_NB <- confusionMatrix(prediction_NB, test_NB$blueWins)
@@ -451,7 +451,7 @@ cat("Exactitud del modelo Naive Bayes: ", acc_NB, "%.\n")
 
 ## Métricas del modelo de Árbol de decisión
 
-Matriz de confusión y estadísiticas
+Matriz de confusión y estadísiticas.
 ```{r}
 prediction_BT <- predict(object = model_BT, test[-1], type = "class")
 metrics_BT <- confusionMatrix(table(test$blueWins, prediction_BT))
@@ -480,8 +480,7 @@ Se utiliza el PCA para hacer un modelo a expensas de encontrar mejores resultado
 
 # Modelo de Regresión logística con PCA
 
-
-Gracias a la función pcr() del paquete [pls](https://cran.r-project.org/web/packages/pls/pls.pdf) podemos recrear un modelo aplicando Regresión por Componentes Principales, y configurar un modelo acorde.
+Gracias a la función pcr() del paquete [*pls*](https://cran.r-project.org/web/packages/pls/pls.pdf) podemos recrear un modelo aplicando Regresión por Componentes Principales, y configurar un modelo acorde.
 
 ```{r}
 model_GLMPCA <- pcr( blueWins ~ .,
@@ -491,7 +490,7 @@ model_GLMPCA <- pcr( blueWins ~ .,
                    )
 summary(model_GLMPCA)
 ```
-Tal y como se mostraba en [PCA](#analisis-de-componentes-principales), hasta el decimotercer componente no se alcanza un 85.6% de explicación de la varianza.
+Tal y como se mostraba en [PCA](#análisis-de-componentes-principales), hasta el decimotercer componente no se alcanza un 85.6% de explicación de la varianza.
 
 ```{r}
 prediction_GLMPCA <- predict(model_GLMPCA, test_asFactor, ncomp = 13, type = "response")
@@ -508,7 +507,7 @@ cat("Exactitud del modelo Regresión Logística con PCA: ", acc_GLMPCA, "%.\n")
 
 # Modelo escogido: Regresión Logística
 
-En comparación con el resto de modelos:
+En comparación con el resto de los modelos:
 ```{r}
 metrics_table <- matrix(c(acc_GLM, acc_GLMPCA, acc_NB, acc_BT),ncol = 1, byrow = TRUE)
 rownames(metrics_table) <- c("Regresión Logística","Regresión Logística con PCA", "Naive Bayes", "Binary Tree")
@@ -518,10 +517,10 @@ metrics_table <- as.table(metrics_table)
 metrics_table
 ```
 
-La métrica de exactitud del modelo de Regresión Logística sigue siendo la mejor, y otro motivo para elegir este modelo es también su mayor sensitividad frente al resto de modelos. Recuperando la [descripción del problema](#descripción-del-problema), se pretendía minimizar los falsos positivos, es decir, los casos que prediga una victoria y resulte ser una derrota, puesto que jugar para acabar perdiendo o sufriendo por una partida agónica y acabar perdiendo es una sensación frustrante, añadiendo el componente del coste de oportiuunidad de tener tiempo a seguir jugando y suplir la derrota al rendirse.
+La métrica de exactitud del modelo de Regresión Logística sigue siendo la mejor, y otro motivo para elegir este modelo es también su mayor sensibilidad frente al resto de modelos. Recuperando la [descripción del problema](#descripción-del-problema), se pretendía minimizar los falsos positivos, es decir, los casos que prediga una victoria y resulte ser una derrota, puesto que jugar para acabar perdiendo o sufriendo por una partida agónica y acabar perdiendo es una sensación frustrante, añadiendo el componente del coste de oportunidad de tener tiempo a seguir jugando y suplir la derrota al rendirse.
 
 
-# Curva ROC del Modelo Escogido
+## Curva ROC del Modelo Escogido
 
 ```{r, message = FALSE}
 roc_score = roc(test$blueWins, prediction_GLM)
@@ -529,11 +528,11 @@ plot(roc_score, main = "ROC Curve from Logistic Regresion Model")
 
 ```
 
-Se puede ver que es una curva visiblemente alejada de la diagonal, aunque no presente una estructura ideal es suficiente para mostrar que el modelo es válido.
+Se puede ver que es una curva visiblemente alejada de la diagonal, aunque no presente una estructura ideal, es suficiente para mostrar que el modelo es válido.
 
 # Conclusiones
 
-El modelo que más nos conviene sigue siendo el modelo de [Regresión Logística](#regresión-logistica), y su curva ROC es buena. Es el más parsimonioso y ninguno de los modelos más complejos tiene mejora significativa. Las variables que más debería priorizar un supuesto *overlay* de *Mobalytics* serían las que vienen dadas por esta tabla de Importancia de Variables en el modelo escogido.
+El modelo que más nos conviene sigue siendo el modelo de [Regresión Logística](#regresión-logística), y su curva ROC es buena. Es el más parsimonioso y ninguno de los modelos más complejos tiene mejora significativa. Las variables que más debería priorizar un supuesto *overlay* de *Mobalytics* serían las que vienen dadas por esta tabla de Importancia de Variables en el modelo escogido.
 ```{r}
 glm_VarImp
 ```
