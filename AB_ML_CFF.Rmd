@@ -8,6 +8,8 @@ date: "May 17th, 2023"
 abstract: |
   Análisis en R de qué variables son más importantes a la hora de ganar una partida del aclamado título de *Riot Games*.
 output:
+  word_document: default
+  html_notebook: default
   html_document:
     number_sections: true
     theme: simplex
@@ -16,8 +18,6 @@ output:
     toc: true
     code_folding: show
     code_download: true
-  html_notebook: default
-  word_document: default
 ---
 
 ```{r}
@@ -96,6 +96,7 @@ library(ggcorrplot)
 library(ggplot2)
 library(ISLR)
 library(Metrics)
+library(pls)
 library(pscl)
 library(pROC)
 library(psych)
@@ -108,7 +109,6 @@ library(rpart.plot)
 library(tidyverse)
 
 set.seed(123)
-# set.seed(888) con esta semilla pasan cosas
 ```
 
 ## Carga de datos:
@@ -250,39 +250,37 @@ ggcorrplot( corr_post,
           )   + ggtitle("Correlation Matrix After Data Cleaning")
 ```
 
-Se observa una tabla con el comportamiento que se esperaba, con los problemas de colinealidad descritos en [el apartado anterior](#variables-correlacionadas-restantes). A continuación se hace un análisis de componentes principales del *dataset*, normalizándolo.
+Se observa una tabla con el comportamiento que se esperaba, con los problemas de colinealidad descritos en [el apartado anterior](#variables-correlacionadas-restantes). A continuación, se hace un análisis de componentes principales del *dataset*, normalizándolo.
 ```{r}
-df_PCA <- prcomp(corr_post, scale = TRUE)
+df_PCA <- prcomp(df_noWins, scale = TRUE)
 summary(df_PCA)
-
 ```
-Se puede contemplar en la columna *'Cummulative Proportion'* que los 2 primeros componentes explican gran parte de los datos, y que a partir del 6 componente el porcentaje acumulado es ínfimo. Con la gráfica a continuación, gracias a la función [*fviz_eig()*](https://www.rdocumentation.org/packages/factoextra/versions/1.0.7/topics/eigenvalue) del paquete *factoextra*, se ilustra lo que acabamos de mencionar con las proporciones de varianza acumuladas.
+Se puede contemplar en la columna *'Cummulative Proportion'* que se necesitan muchos componentes para explicar la varianza de los datos, y que a partir del decimotercer componente el porcentaje acumulado es ínfimo. Con la gráfica a continuación, gracias a la función [*fviz_eig()*](https://www.rdocumentation.org/packages/factoextra/versions/1.0.7/topics/eigenvalue) del paquete *factoextra*, se ilustra lo que se acaba de mencionar con las proporciones de varianza acumuladas.
 ```{r}
-fviz_eig(df_PCA, addlabels = TRUE)
-# get_eig(df_PCA)
+fviz_eig(df_PCA, addlabels = TRUE, ncp = 16)
 ```
 
 Con los 2 primeros componentes se podría explicar casi todo el *dataset*, pero se eligen los primeros 8 para tener un alto porcentaje (84.8%) de explicación de la variabilidad.
 
-Con el gráfico a continuación se ilustra lo que aportan cada variable a las 8 dimensiones que se han elegido.
+Con el gráfico a continuación se ilustra lo que aportan cada variable a las 13 dimensiones que se han elegido.
 ```{r}
-fviz_cos2(df_PCA, choice = "var", axes = 1:8)
+fviz_cos2(df_PCA, choice = "var", axes = 1:13)
 ```
 Se ilustra un biplot (con la función [*fviz_pca_biplot()*](https://www.rdocumentation.org/packages/factoextra/versions/1.0.7/topics/fviz_pca) en específico, la cual mejora en legibilidad) para ver con más claridad la relación entre cos2 con las 2 primeras dimensiones del PCA. 
 ```{r}
 fviz_pca_biplot(df_PCA,
                 label = "var",
                 repel = TRUE,
-                col.ind = "black",
+                col.ind = "grey",
                 col.var = "contrib",
                 habillage = "none",
                 gradient.cols = c("yellow","orange","red","purple"),
                 title = "PCA - Biplot con gradiente en función de cos2"
                )
 ```
-Se prosigue con una muestra de los *eigenvalues* de cada variable contra cada componente principal. Se ha invesigado al respecto y R calcula los vectores y valores con el signo "opuesto" al intuitivo, mas cambiar un vector de signo sólo cambia su orientación y no su magnitud. 
+Se prosigue con una muestra de los *eigenvalues* de cada variable contra cada componente principal. Se ha [invesigado](https://stats.stackexchange.com/a/88882) al respecto y R calcula los vectores y valores con el signo "opuesto" al intuitivo, mas cambiar un vector de signo sólo cambia su orientación y no su magnitud. 
 ```{r, max.height='200px'}
-df_PCA$x
+head(df_PCA$x)
 ```
 
 Se puede comprobar como en el primer componente todos los valores del equipo rojo (el contrario a la variable a predecir, *blueWins*) tienen un valor negativo, puesto que cuantos más recursos obtenga el equipo contrario, más dificil será ganar una partida.
@@ -364,6 +362,7 @@ En el apartado de [métricas](#metricas-del-modelo-de-regresión-logistica) hare
 
 ## Naive Bayes
 
+En el caso del modelo Naive Bayes, se deben hacer algunas transformaciones a los datos
 ```{r}
 train_NB <- train_asFactor
 test_NB <- test_asFactor
@@ -375,10 +374,8 @@ y_train_NB <- train_NB$blueWins
 
 ### Modelo Naive Bayes
 
-
-
+El modelo se basa en el teorema de Bayes, nombrado en honor de Thomas Bayes (1700). este teorema asume que todas las variables son independientes y da la misma importancia a todas las variables. Se usa la librería *caret*.
 ```{r, warning=FALSE}
-
 model_NB = caret::train(x_train_NB, y_train_NB, 'naive_bayes', trControl=trainControl(method='cv',number=10))
 model_NB
 ```
@@ -443,7 +440,7 @@ cat("Exactitud del modelo Regresión Logística: ", acc_GLM, "%.\n")
 Matriz de confusión y estadísiticas
 ```{r, warning=FALSE}
 prediction_NB <- predict(model_NB, newdata = test_NB )
-metrics_NB <- caret::confusionMatrix(prediction_NB, test_NB$blueWins)
+metrics_NB <- confusionMatrix(prediction_NB, test_NB$blueWins)
 metrics_NB
 ```
 
@@ -478,41 +475,50 @@ metrics_table <- as.table(metrics_table)
 metrics_table
 ```
 
-Usamos el PCA para hacer un modelo a expensas de encontrar mejores resultados
+Se utiliza el PCA para hacer un modelo a expensas de encontrar mejores resultados.
 
 
-# Modelo de Regresión logística con PCA 
+# Modelo de Regresión logística con PCA
+
+
+Gracias a la función pcr() del paquete [pls](https://cran.r-project.org/web/packages/pls/pls.pdf) podemos recrear un modelo aplicando Regresión por Componentes Principales, y configurar un modelo acorde.
 
 ```{r}
-model_GLMPCA <- caret::train(
-                             form = blueWins ~ ., 
-                             data = train_asFactor,
-                             trControl = trainControl(method = "cv", number = 10),
-                             method = "glm",
-                             family = "binomial",
-                             preProcess = c( "scale", "pca")
-                            )
+model_GLMPCA <- pcr( blueWins ~ .,
+                     data = train,
+                     scale = TRUE,
+                     validation = "CV"
+                   )
 summary(model_GLMPCA)
 ```
-
-# Métricas del Modelo de RL con PCA
+Tal y como se mostraba en [PCA](#analisis-de-componentes-principales), hasta el decimotercer componente no se alcanza un 85.6% de explicación de la varianza.
 
 ```{r}
-acc_GLMPCA <- model_GLMPCA$results$Accuracy
-metrics_GLMPCA <- model_GLMPCA$results[,-1]
-rownames(metrics_GLMPCA) <- NULL
+prediction_GLMPCA <- predict(model_GLMPCA, test_asFactor, ncomp = 13, type = "response")
+absolutes_LRPCA <- 1*(prediction_GLMPCA>=0.5)
+absolutes_LRPCA <- as.factor(absolutes_LRPCA)
+metrics_GLMPCA <- confusionMatrix(test_asFactor$blueWins, absolutes_LRPCA)
 metrics_GLMPCA
 ```
-Es una mejora nimia respecto al anterior y su interpretabilidad es mucho más baja, puesto que perdemos las variables.
-
+Se puede comprobar que no es una mejora significativa respecto a ninguno de los anteriores modelos, e incluso empeora con respecto a su semejante, obteniendo menos exactitud.
 ```{r}
-metrics_table <- matrix(c(acc_GLMPCA, acc_GLM, acc_NB, acc_BT),ncol = 1, byrow = TRUE)
-rownames(metrics_table) <- c("Regresión Logística con PCA","Regresión Logística", "Naive Bayes", "Binary Tree")
+acc_GLMPCA <- accuracy(test$blueWins, absolutes_LRPCA)
+cat("Exactitud del modelo Regresión Logística con PCA: ", acc_GLMPCA, "%.\n")
+```
+
+# Modelo escogido: Regresión Logística
+
+En comparación con el resto de modelos:
+```{r}
+metrics_table <- matrix(c(acc_GLM, acc_GLMPCA, acc_NB, acc_BT),ncol = 1, byrow = TRUE)
+rownames(metrics_table) <- c("Regresión Logística","Regresión Logística con PCA", "Naive Bayes", "Binary Tree")
 colnames(metrics_table) <- c("Exactitud (%)")
 
 metrics_table <- as.table(metrics_table)
 metrics_table
 ```
+
+La métrica de exactitud del modelo de Regresión Logística sigue siendo la mejor, y otro motivo para elegir este modelo es también su mayor sensitividad frente al resto de modelos. Recuperando la [descripción del problema](#descripción-del-problema), se pretendía minimizar los falsos positivos, es decir, los casos que prediga una victoria y resulte ser una derrota, puesto que jugar para acabar perdiendo o sufriendo por una partida agónica y acabar perdiendo es una sensación frustrante, añadiendo el componente del coste de oportiuunidad de tener tiempo a seguir jugando y suplir la derrota al rendirse.
 
 
 # Curva ROC del Modelo Escogido
@@ -523,11 +529,12 @@ plot(roc_score, main = "ROC Curve from Logistic Regresion Model")
 
 ```
 
-Se aleja de la diagonal lo suficiente dado las características del modelo.
+Se puede ver que es una curva visiblemente alejada de la diagonal, aunque no presente una estructura ideal es suficiente para mostrar que el modelo es válido.
 
 # Conclusiones
 
-Se pretende minimizar los falsos positivos, es decir, los casos que prediga una victoria y resulte ser una derrota-> Sensitividad?
-porque jugar para acabar perdiendo o sufriendo por una partida agónica y acabar perdiendo es una sensación frustrante.
-
-El modelo que más nos conviene sigue siendo el modelo de [Regresión Logística](#regresión-logistica), y su curva ROC es buena. es el más parsimonioso y ninguno de los modelos más complejos tiene mejora significativa.
+El modelo que más nos conviene sigue siendo el modelo de [Regresión Logística](#regresión-logistica), y su curva ROC es buena. Es el más parsimonioso y ninguno de los modelos más complejos tiene mejora significativa. Las variables que más debería priorizar un supuesto *overlay* de *Mobalytics* serían las que vienen dadas por esta tabla de Importancia de Variables en el modelo escogido.
+```{r}
+glm_VarImp
+```
+Muchas gracias por leerme.
